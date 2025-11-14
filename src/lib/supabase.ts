@@ -1,11 +1,18 @@
-import { createClient } from '@supabase/supabase-js';
-import { Database } from '../types/supabase';
+import { createClient } from "@supabase/supabase-js";
+import { Database } from "../types/database";
+import {
+  UserProfile,
+  Medication,
+  IntakeLog,
+  DosageSchedule,
+  Notification,
+} from "../types/database";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  throw new Error("Missing Supabase environment variables");
 }
 
 export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
@@ -14,50 +21,62 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
     autoRefreshToken: true,
     detectSessionInUrl: true,
     storage: localStorage,
-    storageKey: 'meditrack-auth-token',
-    flowType: 'pkce'
+    storageKey: "meditrack-auth-token",
+    flowType: "pkce",
   },
   global: {
     headers: {
-      'x-application-name': 'meditrack'
-    }
+      "x-application-name": "meditrack",
+    },
   },
   db: {
-    schema: 'public'
+    schema: "public",
   },
   realtime: {
     params: {
-      eventsPerSecond: 10
-    }
-  }
+      eventsPerSecond: 10,
+    },
+  },
 });
 
 // Auth helpers
 export const auth = {
   signUp: async (email: string, password: string, metadata: any) => {
-    return supabase.auth.signUp({
+    console.log('Starting signup process for email:', email, 'with metadata:', metadata);
+    
+    const result = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: metadata,
-        emailRedirectTo: `${window.location.origin}/auth/callback`
-      }
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
+
+    console.log('Signup result:', result);
+
+    // Don't create patient profile here - wait for email confirmation
+    // The patient profile will be created when user first logs in
+    if (result.data.user && !result.error) {
+      console.log('Signup successful, patient profile will be created on first login for user:', result.data.user.id);
+    }
+
+    return result;
   },
 
   signIn: async (email: string, password: string) => {
     return supabase.auth.signInWithPassword({
       email,
-      password
+      password,
     });
   },
 
-  signInWithOAuth: async (provider: 'google' | 'apple') => {
+  signInWithOAuth: async (provider: "google" | "apple") => {
     return supabase.auth.signInWithOAuth({
       provider,
       options: {
-        redirectTo: `${window.location.origin}/auth/callback`
-      }
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
     });
   },
 
@@ -67,13 +86,13 @@ export const auth = {
 
   resetPassword: async (email: string) => {
     return supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/auth/reset-password`
+      redirectTo: `${window.location.origin}/auth/reset-password`,
     });
   },
 
   updatePassword: async (newPassword: string) => {
     return supabase.auth.updateUser({
-      password: newPassword
+      password: newPassword,
     });
   },
 
@@ -83,82 +102,375 @@ export const auth = {
 
   getUser: async () => {
     return supabase.auth.getUser();
-  }
+  },
 };
 
 // Database helpers
 export const db = {
-  // Users
-  getUser: async (id: string) => {
-    return supabase.from('users').select('*').eq('id', id).single();
-  },
-
-  updateUser: async (id: string, data: any) => {
-    return supabase.from('users').update(data).eq('id', id).select().single();
-  },
-
-  // Medications
-  getMedications: async (userId: string, activeOnly = true) => {
-    let query = supabase.from('medications').select('*').eq('user_id', userId);
-    if (activeOnly) {
-      query = query.eq('is_active', true);
+  // Users - Get patient profile linked to auth user
+  getUser: async (userId: string) => {
+    console.log('Getting user profile for userId:', userId);
+    
+    // Check if user is authenticated
+    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+    console.log('Current session:', session);
+    console.log('Session error:', sessionError);
+    
+    if (sessionError || !session) {
+      console.error('No valid session found');
+      return { data: null, error: { message: 'No authenticated session' } };
     }
-    return query.order('name');
+    
+    console.log('Making request to patients table with user_id:', userId);
+    const result = await supabase.from("patients").select("*").eq("user_id", userId).single();
+    console.log('Patients query result:', result);
+    
+    // If patient profile doesn't exist, create it
+    if (result.error && result.error.code === 'PGRST116') {
+      console.log('Patient profile not found, creating new profile for user:', userId);
+      
+      // Get user metadata from auth
+      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      if (userError || !user) {
+        console.error('Could not get user metadata:', userError);
+        return { data: null, error: { message: 'Could not get user information' } };
+      }
+      
+      console.log('Creating patient profile directly');
+      
+      // Create patient profile directly
+      const patientData = {
+        user_id: userId,
+        first_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario',
+        last_name: '',
+        date_of_birth: '1990-01-01', // Default date since field is required
+        gender: null,
+        phone_number: null,
+        emergency_contact_name: null,
+        emergency_contact_phone: null,
+        medical_conditions: null,
+        allergies: null,
+        preferred_language: 'es',
+        timezone: 'Europe/Madrid',
+        profile_completed: false
+      };
+      
+      console.log('Creating patient profile with data:', patientData);
+      const { data: newPatient, error: insertError } = await supabase
+        .from('patients')
+        .insert(patientData as any)
+        .select()
+        .single();
+      
+      if (insertError) {
+        console.error('Error creating patient profile:', insertError);
+        return { data: null, error: insertError };
+      }
+      
+      console.log('Patient profile created successfully:', newPatient);
+      
+      // Create initial user stats
+      try {
+        const statsData = {
+          user_id: userId,
+          total_medications: 0,
+          active_medications: 0,
+          total_intakes: 0,
+          successful_intakes: 0,
+          missed_intakes: 0,
+          adherence_rate: 0.00,
+          current_streak: 0,
+          longest_streak: 0,
+          total_points: 0,
+          last_activity_at: new Date().toISOString()
+        };
+        
+        await supabase.from('user_stats').insert(statsData as any);
+        console.log('User stats created successfully');
+      } catch (statsError) {
+        console.error('Error creating user stats:', statsError);
+        // Continue even if stats creation fails
+      }
+      
+      // Award welcome badge
+      try {
+        const { data: welcomeBadge } = await supabase
+          .from('badges')
+          .select('id')
+          .eq('name', 'welcome')
+          .single();
+          
+        if (welcomeBadge && (welcomeBadge as any).id) {
+          await supabase.from('user_badges').insert({
+            user_id: userId,
+            badge_id: (welcomeBadge as any).id,
+            earned_at: new Date().toISOString(),
+            points_at_earning: 0
+          } as any);
+          console.log('Welcome badge awarded successfully');
+        }
+      } catch (badgeError) {
+        console.error('Error awarding welcome badge:', badgeError);
+        // Continue even if badge creation fails
+      }
+      
+      return { data: newPatient, error: null };
+    }
+    
+    return result;
+  },
+
+  updateUser: async (userId: string, data: any) => {
+    return (supabase.from("patients") as any)
+      .update(data)
+      .eq("user_id", userId)
+      .select()
+      .single();
+  },
+
+  // Medications - Get medications through patient relationship
+  getMedications: async (userId: string, activeOnly = true) => {
+    // First get the patient ID for this user
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    if (patientError || !patient) {
+      return { data: [], error: patientError };
+    }
+
+    const patientId = (patient as any).id;
+    let query = supabase.from("medications").select("*").eq("patient_id", patientId);
+    if (activeOnly) {
+      query = query.eq("is_active", true);
+    }
+    return query.order("generic_name");
   },
 
   getMedication: async (id: string) => {
-    return supabase.from('medications').select('*').eq('id', id).single();
+    return supabase.from("medications").select("*").eq("id", id).single();
   },
 
-  createMedication: async (data: any) => {
-    return supabase.from('medications').insert(data).select().single();
+  createMedication: async (userId: string, data: any) => {
+    // First get the patient ID for this user
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    if (patientError || !patient) {
+      throw new Error('Patient profile not found');
+    }
+
+    const patientId = (patient as any).id;
+    const inserted = await supabase.from("medications").insert({
+      ...data,
+      patient_id: patientId
+    }).select().single();
+
+    const med = (inserted as any).data;
+    if (med && Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+      const start = med.start_date ? new Date(med.start_date) : new Date();
+      const end = med.end_date ? new Date(med.end_date) : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
+
+      const items: any[] = [];
+      const dayMs = 24 * 60 * 60 * 1000;
+      for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+        const day = new Date(t);
+        med.specific_times.forEach((time: string) => {
+          const parts = (time || '').split(':');
+          const h = parseInt(parts[0] || '0', 10);
+          const m2 = parseInt(parts[1] || '0', 10);
+          const s2 = parseInt(parts[2] || '0', 10);
+          const when = new Date(day);
+          when.setHours(h, m2, s2, 0);
+          items.push({
+            medication_id: med.id,
+            scheduled_time: when.toISOString(),
+            dose_amount: med.dosage,
+            is_taken: false,
+          });
+        });
+      }
+
+      if (items.length > 0) {
+        await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time' } as any);
+      }
+    }
+
+    return inserted;
   },
 
   updateMedication: async (id: string, data: any) => {
-    return supabase.from('medications').update(data).eq('id', id).select().single();
+    return (supabase.from("medications") as any)
+      .update(data)
+      .eq("id", id)
+      .select()
+      .single();
   },
 
   deleteMedication: async (id: string) => {
-    return supabase.from('medications').update({ is_active: false }).eq('id', id);
+    return (supabase.from("medications") as any)
+      .update({ is_active: false })
+      .eq("id", id);
   },
 
-  // Medication Logs
-  getMedicationLogs: async (userId: string) => {
-    return supabase
-      .from('medication_logs')
-      .select('*')
-      .eq('user_id', userId)
-      .order('taken_at', { ascending: false });
-  },
+  // Intake Logs - Get through medication -> patient relationship
+  getIntakeLogs: async (userId: string) => {
+    // Get patient ID first
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    console.log('getIntakeLogs - patient lookup:', { userId, patient, patientError });
+    
+    if (patientError || !patient) {
+      return { data: [], error: patientError };
+    }
 
-  createMedicationLog: async (data: any) => {
-    return supabase.from('medication_logs').insert(data).select().single();
-  },
-
-  // Medication Schedules
-  getTodaySchedule: async (userId: string) => {
-    const today = new Date().toISOString().split('T')[0];
-    return supabase
-      .from('medication_schedules')
+    const patientId = (patient as any).id;
+    console.log('getIntakeLogs - patientId:', patientId);
+    
+    const result = await supabase
+      .from("intake_logs")
       .select(`
         *,
-        medications (*)
+        medications!inner(*)
       `)
+      .eq("medications.patient_id", patientId)
+      .order("taken_at", { ascending: false });
+    
+    console.log('getIntakeLogs - query result:', result);
+    return result;
+  },
+
+  createIntakeLog: async (medicationId: string, data: any) => {
+    return supabase.from("intake_logs").insert({
+      medication_id: medicationId,
+      ...data
+    }).select().single();
+  },
+
+  // Dosage Schedules - Get through medication -> patient relationship
+  getTodaySchedule: async (userId: string) => {
+    const now = new Date();
+    const start = new Date(now); start.setHours(0,0,0,0);
+    const end = new Date(now); end.setHours(23,59,59,999);
+    
+    // Get patient ID first
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    if (patientError || !patient) {
+      return { data: [], error: patientError };
+    }
+
+    const patientId = (patient as any).id;
+    return supabase
+      .from("dosage_schedules")
+      .select(`
+        *,
+        medications!inner(*)
+      `)
+      .eq("medications.patient_id", patientId)
+      .gte("scheduled_time", start.toISOString())
+      .lt("scheduled_time", end.toISOString())
+      .order("scheduled_time");
+  },
+
+  // Get schedules for a date range (for calendar view)
+  getSchedulesForDateRange: async (userId: string, startDate: Date, endDate: Date) => {
+    // Get patient ID first
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    if (patientError || !patient) {
+      return { data: [], error: patientError };
+    }
+
+    const patientId = (patient as any).id;
+    return supabase
+      .from("dosage_schedules")
+      .select(`
+        *,
+        medications!inner(*)
+      `)
+      .eq("medications.patient_id", patientId)
+      .gte("scheduled_time", startDate.toISOString())
+      .lte("scheduled_time", endDate.toISOString())
+      .order("scheduled_time");
+  },
+
+  // Ensure schedules exist for a date range (idempotent via upsert)
+  ensureSchedulesForDateRange: async (userId: string, startDate: Date, endDate: Date) => {
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('id')
       .eq('user_id', userId)
-      .gte('scheduled_time', `${today}T00:00:00`)
-      .lt('scheduled_time', `${today}T23:59:59`)
-      .order('scheduled_time');
+      .single();
+    if (patientError || !patient) return { data: null, error: patientError };
+    const patientId = (patient as any).id;
+
+    const { data: medications } = await supabase
+      .from('medications')
+      .select('*')
+      .eq('patient_id', patientId)
+      .eq('is_active', true);
+
+    const items: any[] = [];
+    const dayMs = 24 * 60 * 60 * 1000;
+    for (let t = startDate.getTime(); t <= endDate.getTime(); t += dayMs) {
+      const day = new Date(t);
+      (medications as any[] || []).forEach((med) => {
+        if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+          // Respect medication start/end window
+          const medStart = med.start_date ? new Date(med.start_date) : startDate;
+          // For continuous treatments (no end_date), extend to the requested endDate or 30 days from start
+          const defaultEndDate = med.start_date ? new Date(new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000) : endDate;
+          const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
+          if (day < medStart || day > medEnd) return;
+
+          med.specific_times.forEach((time: string) => {
+            const parts = (time || '').split(':');
+            const h = parseInt(parts[0] || '0', 10);
+            const m2 = parseInt(parts[1] || '0', 10);
+            const s2 = parseInt(parts[2] || '0', 10);
+            const when = new Date(day);
+            when.setHours(h, m2, s2, 0);
+            items.push({
+              medication_id: med.id,
+              scheduled_time: when.toISOString(),
+              dose_amount: med.dosage,
+              is_taken: false,
+            });
+          });
+        }
+      });
+    }
+
+    if (items.length > 0) {
+      await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time' } as any);
+    }
+    return { data: true, error: null };
   },
 
   updateScheduleStatus: async (id: string, status: string, notes?: string) => {
-    return supabase
-      .from('medication_schedules')
-      .update({ 
-        status, 
-        taken_at: status === 'taken' ? new Date().toISOString() : null,
-        notes 
-      })
-      .eq('id', id)
+    return ((supabase.from("dosage_schedules") as any).update({
+        is_taken: status === "taken",
+        notes,
+      } as any) as any)
+      .eq("id", id)
       .select()
       .single();
   },
@@ -166,156 +478,168 @@ export const db = {
   // Caregivers
   getCaregivers: async (patientId: string) => {
     return supabase
-      .from('caregivers')
-      .select(`
+      .from("caregivers")
+      .select(
+        `
         *,
         caregiver:users!caregiver_id(*)
-      `)
-      .eq('patient_id', patientId)
-      .eq('is_active', true);
+      `
+      )
+      .eq("patient_id", patientId)
+      .eq("is_active", true);
   },
 
-  inviteCaregiver: async (patientId: string, email: string, relationship: string) => {
-    return supabase.from('caregiver_invites').insert({
+  inviteCaregiver: async (
+    patientId: string,
+    email: string,
+    relationship: string
+  ) => {
+    return supabase.from("caregiver_invites").insert({
       patient_id: patientId,
       email,
       relationship,
-      invited_at: new Date().toISOString()
-    });
+      invited_at: new Date().toISOString(),
+    } as any);
   },
 
-  // Statistics
-  getAdherenceStats: async (userId: string, period: 'week' | 'month' | 'year' = 'month') => {
-    const startDate = new Date();
-    if (period === 'week') startDate.setDate(startDate.getDate() - 7);
-    if (period === 'month') startDate.setDate(startDate.getDate() - 30);
-    if (period === 'year') startDate.setFullYear(startDate.getFullYear() - 1);
-
+  // Statistics - Get user stats directly
+  getAdherenceStats: async (userId: string) => {
     return supabase
-      .from('adherence_records')
-      .select('*')
-      .eq('user_id', userId)
-      .gte('date', startDate.toISOString().split('T')[0])
-      .order('date');
+      .from("user_stats")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
   },
 
   // Badges
   getUserBadges: async (userId: string) => {
     return supabase
-      .from('user_badges')
-      .select(`
+      .from("user_badges")
+      .select(
+        `
         *,
         badge:badges(*)
-      `)
-      .eq('user_id', userId)
-      .order('earned_at', { ascending: false });
+      `
+      )
+      .eq("user_id", userId)
+      .order("earned_at", { ascending: false });
   },
 
-  // Notifications
+  // Notifications - Get through patient relationship
   getNotifications: async (userId: string, limit = 50) => {
+    // Get patient ID first
+    const { data: patient, error: patientError } = await supabase
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
+      .single();
+    
+    if (patientError || !patient) {
+      return { data: [], error: patientError };
+    }
+
+    const patientId = (patient as any).id;
     return supabase
-      .from('notifications')
-      .select('*')
-      .eq('user_id', userId)
-      .order('created_at', { ascending: false })
+      .from("notifications")
+      .select("*")
+      .eq("patient_id", patientId)
+      .order("created_at", { ascending: false })
       .limit(limit);
   },
 
   markNotificationAsRead: async (id: string) => {
-    return supabase
-      .from('notifications')
-      .update({ is_read: true })
-      .eq('id', id);
-  }
+    return ((supabase.from("notifications") as any).update({ is_read: true } as any) as any)
+      .eq("id", id);
+  },
 };
 
 // Realtime subscriptions
-export const subscribeToMedicationUpdates = (userId: string, callback: (payload: any) => void) => {
-  return supabase
-    .channel('medication_updates')
-    .on(
-      'postgres_changes',
-      {
-        event: '*',
-        schema: 'public',
-        table: 'medication_schedules',
-        filter: `user_id=eq.${userId}`
-      },
-      callback
-    )
-    .subscribe();
+export const subscribeToMedicationUpdates = (
+  userId: string,
+  callback: (payload: any) => void
+) => {
+  // This would need to be implemented with a more complex query
+  // since dosage_schedules doesn't have direct user_id
+  console.warn('subscribeToMedicationUpdates needs implementation for patient relationship');
+  return null;
 };
 
-export const subscribeToNotifications = (userId: string, callback: (payload: any) => void) => {
-  return supabase
-    .channel('notifications')
-    .on(
-      'postgres_changes',
-      {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `user_id=eq.${userId}`
-      },
-      callback
-    )
-    .subscribe();
+export const subscribeToNotifications = (
+  userId: string,
+  callback: (payload: any) => void
+) => {
+  // This would need to be implemented with a more complex query
+  // since notifications uses patient_id, not user_id
+  console.warn('subscribeToNotifications needs implementation for patient relationship');
+  return null;
 };
 
 // Storage helpers
 export const storage = {
   uploadAvatar: async (file: File, userId: string) => {
-    const fileName = `${userId}/avatar-${Date.now()}.${file.name.split('.').pop()}`;
+    const fileName = `${userId}/avatar-${Date.now()}.${file.name
+      .split(".")
+      .pop()}`;
     const { data, error } = await supabase.storage
-      .from('avatars')
+      .from("avatars")
       .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
+        cacheControl: "3600",
+        upsert: false,
       });
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('avatars')
-      .getPublicUrl(fileName);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("avatars").getPublicUrl(fileName);
 
     return publicUrl;
   },
 
-  uploadMedicationImage: async (file: File, userId: string, medicationId: string) => {
-    const fileName = `${userId}/medications/${medicationId}-${Date.now()}.${file.name.split('.').pop()}`;
+  uploadMedicationImage: async (
+    file: File,
+    userId: string,
+    medicationId: string
+  ) => {
+    const fileName = `${userId}/medications/${medicationId}-${Date.now()}.${file.name
+      .split(".")
+      .pop()}`;
     const { data, error } = await supabase.storage
-      .from('medications')
+      .from("medications")
       .upload(fileName, file, {
-        cacheControl: '3600',
-        upsert: false
+        cacheControl: "3600",
+        upsert: false,
       });
 
     if (error) throw error;
 
-    const { data: { publicUrl } } = supabase.storage
-      .from('medications')
-      .getPublicUrl(fileName);
+    const {
+      data: { publicUrl },
+    } = supabase.storage.from("medications").getPublicUrl(fileName);
 
     return publicUrl;
-  }
+  },
 };
 
 export default supabase;
 
 // Individual exports for convenience
 export const {
+  getUser,
+  updateUser,
   getMedications,
   getMedication,
   createMedication,
   updateMedication,
   deleteMedication,
-  getMedicationLogs,
-  createMedicationLog,
-  getCaregivers,
-  inviteCaregiver,
+  getIntakeLogs,
+  createIntakeLog,
+  getTodaySchedule,
+  getSchedulesForDateRange,
+  ensureSchedulesForDateRange,
+  updateScheduleStatus,
   getAdherenceStats,
   getUserBadges,
   getNotifications,
-  markNotificationAsRead
+  markNotificationAsRead,
 } = db;

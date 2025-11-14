@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Plus, Pill, Clock, Calendar, Edit2, Trash2, Search, Filter } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
-import { getMedications, deleteMedication } from '../lib/supabase';
-import { Medication } from '../types';
+import { db } from '../lib/supabase';
+import { Medication, Patient } from '../types';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
 import { toast } from 'sonner';
 
 export default function Medications() {
   const { user } = useAuthStore();
   const [medications, setMedications] = useState<Medication[]>([]);
+  const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'active' | 'inactive'>('all');
@@ -23,8 +24,18 @@ export default function Medications() {
     
     try {
       setLoading(true);
-      const data = await getMedications(user.id);
-      setMedications(data || []);
+      
+      // Get patient profile first
+      const { data: patientData, error: patientError } = await db.getUser(user.user_id);
+      if (patientData && !patientError) {
+        setPatient(patientData as any);
+        
+        // Get medications for this patient
+        const { data: medsData, error: medsError } = await db.getMedications(user.user_id, true);
+        if (!medsError) {
+          setMedications(medsData || []);
+        }
+      }
     } catch (error) {
       console.error('Error loading medications:', error);
       toast.error('Error al cargar medicamentos');
@@ -37,7 +48,7 @@ export default function Medications() {
     if (!confirm('¿Estás seguro de que quieres eliminar este medicamento?')) return;
 
     try {
-      await deleteMedication(medicationId);
+      await db.deleteMedication(medicationId);
       toast.success('Medicamento eliminado correctamente');
       loadMedications();
     } catch (error) {
@@ -47,8 +58,8 @@ export default function Medications() {
   };
 
   const filteredMedications = medications.filter(med => {
-    const matchesSearch = med.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         med.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesSearch = med.generic_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                         (med.brand && med.brand.toLowerCase().includes(searchTerm.toLowerCase()));
     
     const matchesFilter = filterType === 'all' || 
                          (filterType === 'active' && med.is_active) ||
@@ -153,9 +164,11 @@ export default function Medications() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
                     <h3 className="text-xl font-semibold text-gray-900 mb-1">
-                      {medication.name}
+                      {medication.generic_name}
                     </h3>
-                    <p className="text-gray-600 text-base">{medication.description}</p>
+                    {medication.brand && (
+                      <p className="text-gray-600 text-base">{medication.brand}</p>
+                    )}
                   </div>
                   <div className={`w-4 h-4 rounded-full ml-3 flex-shrink-0 ${
                     medication.is_active ? 'bg-green-500' : 'bg-gray-400'
@@ -169,18 +182,23 @@ export default function Medications() {
                   <div className="flex items-center gap-3 text-gray-700">
                     <Pill className="w-5 h-5 text-green-600" />
                     <span className="text-base font-medium">
-                      {medication.dosage_amount} {medication.dosage_unit}
+                      {medication.dosage}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-700">
                     <Clock className="w-5 h-5 text-green-600" />
                     <span className="text-base">
-                      {medication.frequency_type === 'daily' && 'Una vez al día'}
-                      {medication.frequency_type === 'twice_daily' && 'Dos veces al día'}
-                      {medication.frequency_type === 'three_times_daily' && 'Tres veces al día'}
-                      {medication.frequency_type === 'four_times_daily' && 'Cuatro veces al día'}
-                      {medication.frequency_type === 'as_needed' && 'Cuando sea necesario'}
-                      {medication.frequency_type === 'custom' && 'Horario personalizado'}
+                      {medication.frequency === 'daily' && 'Una vez al día'}
+                      {medication.frequency === 'twice_daily' && 'Dos veces al día'}
+                      {medication.frequency === 'three_times_daily' && 'Tres veces al día'}
+                      {medication.frequency === 'four_times_daily' && 'Cuatro veces al día'}
+                      {medication.frequency === 'every_4_hours' && 'Cada 4 horas'}
+                      {medication.frequency === 'every_6_hours' && 'Cada 6 horas'}
+                      {medication.frequency === 'every_8_hours' && 'Cada 8 horas'}
+                      {medication.frequency === 'every_12_hours' && 'Cada 12 horas'}
+                      {medication.frequency === 'weekly' && 'Semanalmente'}
+                      {medication.frequency === 'monthly' && 'Mensualmente'}
+                      {medication.frequency === 'as_needed' && 'Cuando sea necesario'}
                     </span>
                   </div>
                   {medication.start_date && (
@@ -191,23 +209,30 @@ export default function Medications() {
                       </span>
                     </div>
                   )}
+                  {medication.end_date && (
+                    <div className="flex items-center gap-3 text-gray-700">
+                      <Calendar className="w-5 h-5 text-green-600" />
+                      <span className="text-base">
+                        Hasta {new Date(medication.end_date).toLocaleDateString('es-ES')}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                {/* Schedule Preview */}
-                {medication.schedules && medication.schedules.length > 0 && (
+                {/* Specific Times */}
+                {medication.specific_times && medication.specific_times.length > 0 && (
                   <div className="mb-4">
                     <h4 className="text-sm font-medium text-gray-900 mb-2">Horarios:</h4>
                     <div className="space-y-1">
-                      {medication.schedules.slice(0, 3).map((schedule, index) => (
+                      {medication.specific_times.slice(0, 3).map((time, index) => (
                         <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
                           <Clock className="w-4 h-4" />
-                          <span>{schedule.time}</span>
-                          {schedule.dose && <span>({schedule.dose})</span>}
+                          <span>{time}</span>
                         </div>
                       ))}
-                      {medication.schedules.length > 3 && (
+                      {medication.specific_times.length > 3 && (
                         <div className="text-sm text-gray-500">
-                          +{medication.schedules.length - 3} horarios más
+                          +{medication.specific_times.length - 3} horarios más
                         </div>
                       )}
                     </div>
@@ -219,7 +244,7 @@ export default function Medications() {
                   <Link
                     to={`/medications/edit/${medication.id}`}
                     className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg font-medium text-base flex items-center justify-center gap-2 transition-colors min-h-[44px]"
-                    aria-label={`Editar ${medication.name}`}
+                    aria-label={`Editar ${medication.generic_name}`}
                   >
                     <Edit2 className="w-5 h-5" />
                     Editar
@@ -227,7 +252,7 @@ export default function Medications() {
                   <button
                     onClick={() => handleDelete(medication.id)}
                     className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-3 rounded-lg font-medium text-base flex items-center justify-center gap-2 transition-colors min-h-[44px]"
-                    aria-label={`Eliminar ${medication.name}`}
+                    aria-label={`Eliminar ${medication.generic_name}`}
                   >
                     <Trash2 className="w-5 h-5" />
                     Eliminar
@@ -257,7 +282,7 @@ export default function Medications() {
               </div>
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">
-                  {medications.reduce((total, med) => total + (med.schedules?.length || 0), 0)}
+                  {medications.reduce((total, med) => total + (med.specific_times?.length || 0), 0)}
                 </div>
                 <div className="text-sm text-gray-600">Horarios totales</div>
               </div>

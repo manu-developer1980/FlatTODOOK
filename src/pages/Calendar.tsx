@@ -1,21 +1,36 @@
-import React, { useState, useEffect } from 'react';
-import { ChevronLeft, ChevronRight, Pill, Clock, CheckCircle, Circle } from 'lucide-react';
-import { useAuthStore } from '../stores/auth';
-import { getMedications, getMedicationLogs, createMedicationLog } from '../lib/supabase';
-import { NotificationService } from '../services/notificationService';
-import { Medication, MedicationLog } from '../types';
-import { format, addDays, subDays, startOfWeek, endOfWeek, isSameDay, parseISO } from 'date-fns';
-import { es } from 'date-fns/locale';
-import { toast } from 'sonner';
-import LoadingSpinner from '../components/ui/LoadingSpinner';
+import React, { useState, useEffect } from "react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Pill,
+  Clock,
+  CheckCircle,
+  Circle,
+} from "lucide-react";
+import { useAuthStore } from "../stores/auth";
+import { db } from "../lib/supabase";
+// import { NotificationService } from '../services/notificationService';
+import { Medication, DosageSchedule, IntakeLog } from "../types";
+import {
+  format,
+  addDays,
+  subDays,
+  startOfWeek,
+  endOfWeek,
+  isSameDay,
+  parseISO,
+} from "date-fns";
+import { es } from "date-fns/locale";
+import { toast } from "sonner";
+import LoadingSpinner from "../components/ui/LoadingSpinner";
 
 interface DaySchedule {
   date: Date;
   medications: {
     medication: Medication;
-    schedule: any;
+    schedule: DosageSchedule;
     taken: boolean;
-    log?: MedicationLog;
+    log?: IntakeLog;
   }[];
 }
 
@@ -23,7 +38,8 @@ export default function Calendar() {
   const { user } = useAuthStore();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [medications, setMedications] = useState<Medication[]>([]);
-  const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>([]);
+  const [dosageSchedules, setDosageSchedules] = useState<DosageSchedule[]>([]);
+  const [intakeLogs, setIntakeLogs] = useState<IntakeLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [weekSchedule, setWeekSchedule] = useState<DaySchedule[]>([]);
@@ -34,23 +50,62 @@ export default function Calendar() {
 
   useEffect(() => {
     generateWeekSchedule();
-  }, [medications, medicationLogs, currentDate]);
+  }, [medications, dosageSchedules, intakeLogs, currentDate]);
 
   const loadData = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
-      const [medsData, logsData] = await Promise.all([
-        getMedications(user.id),
-        getMedicationLogs(user.id)
-      ]);
-      
-      setMedications(medsData?.filter(med => med.is_active) || []);
-      setMedicationLogs(logsData || []);
+
+      // Get patient profile first
+      const { data: patientData, error: patientError } = await db.getUser(
+        user.user_id
+      );
+      if (patientError || !patientData) {
+        setLoading(false);
+        return;
+      }
+
+      // Get active medications for this patient
+      const { data: medsData, error: medsError } = await db.getMedications(
+        user.user_id,
+        true
+      );
+      if (medsError) throw medsError;
+      setMedications(medsData || []);
+
+      // Get dosage schedules for the entire week
+      const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
+      const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
+      // Ensure schedules exist for this range (idempotent)
+      await (db as any).ensureSchedulesForDateRange(
+        user.user_id,
+        startDate,
+        endDate
+      );
+      const { data: schedulesData, error: schedulesError } = await (
+        db as any
+      ).getSchedulesForDateRange(user.user_id, startDate, endDate);
+      if (schedulesError) throw schedulesError;
+      setDosageSchedules(schedulesData || []);
+
+      // Get intake logs for the current period
+      const { data: logsData, error: logsError } = await db.getIntakeLogs(
+        user.user_id
+      );
+      if (logsError) throw logsError;
+
+      // Filter logs for current week
+      const weekLogs = ((logsData as any[]) || []).filter((log: any) => {
+        if (!log.taken_at) return false;
+        const logDate = parseISO(log.taken_at);
+        return logDate >= startDate && logDate <= endDate;
+      });
+      setIntakeLogs(weekLogs);
     } catch (error) {
-      console.error('Error loading data:', error);
-      toast.error('Error al cargar datos del calendario');
+      console.error("Error loading data:", error);
+      toast.error("Error al cargar datos del calendario");
     } finally {
       setLoading(false);
     }
@@ -59,98 +114,141 @@ export default function Calendar() {
   const generateWeekSchedule = () => {
     const start = startOfWeek(currentDate, { weekStartsOn: 1 });
     const end = endOfWeek(currentDate, { weekStartsOn: 1 });
-    
+
+    console.log("Generating week schedule:", { start, end, currentDate });
+    console.log("Medications:", medications);
+    console.log("Dosage schedules:", dosageSchedules);
+
     const schedule: DaySchedule[] = [];
     let current = start;
-    
+
     while (current <= end) {
-      const dayMeds: DaySchedule['medications'] = [];
-      
-      medications.forEach(medication => {
-        if (medication.schedules) {
-          medication.schedules.forEach(scheduleItem => {
-            const isTaken = medicationLogs.some(log => 
-              log.medication_id === medication.id && 
-              isSameDay(parseISO(log.scheduled_date), current) &&
-              log.taken_at
+      const dayMeds: DaySchedule["medications"] = [];
+
+      medications.forEach((medication) => {
+        // Get schedules for this medication
+        const medSchedules = dosageSchedules.filter(
+          (schedule) => schedule.medication_id === medication.id
+        );
+
+        medSchedules.forEach((scheduleItem) => {
+          const scheduleDate = new Date(scheduleItem.scheduled_time);
+          console.log(
+            `Checking schedule ${scheduleItem.id}: medication=${
+              medication.generic_name
+            }, scheduled_time=${
+              scheduleItem.scheduled_time
+            }, current=${current}, isSameDay=${isSameDay(
+              scheduleDate,
+              current
+            )}`
+          );
+          if (isSameDay(scheduleDate, current)) {
+            const isTaken = scheduleItem.is_taken;
+
+            const log = intakeLogs.find(
+              (log) =>
+                log.medication_id === medication.id &&
+                isSameDay(parseISO(log.taken_at), current)
             );
-            
-            const log = medicationLogs.find(log => 
-              log.medication_id === medication.id && 
-              isSameDay(parseISO(log.scheduled_date), current) &&
-              log.time === scheduleItem.time
-            );
-            
+
             dayMeds.push({
               medication,
               schedule: scheduleItem,
-              taken: !!log?.taken_at,
-              log
+              taken: isTaken,
+              log,
             });
-          });
-        }
+          }
+        });
       });
-      
+
       schedule.push({
         date: new Date(current),
-        medications: dayMeds.sort((a, b) => a.schedule.time.localeCompare(b.schedule.time))
+        medications: dayMeds.sort((a, b) => {
+          const timeA = new Date(a.schedule.scheduled_time).getTime();
+          const timeB = new Date(b.schedule.scheduled_time).getTime();
+          return timeA - timeB;
+        }),
       });
-      
+
       current = addDays(current, 1);
     }
-    
+
+    console.log("Generated week schedule:", schedule);
     setWeekSchedule(schedule);
   };
 
-  const handleMarkAsTaken = async (medicationId: string, date: Date, time: string) => {
+  const handleMarkAsTaken = async (
+    scheduleId: string,
+    medicationId: string
+  ) => {
     if (!user) return;
 
     try {
-      // Get medication details for notification
-      const medication = medications.find(med => med.id === medicationId);
+      // Find the medication in our medications array
+      const medication = medications.find((med) => med.id === medicationId);
       if (!medication) {
-        toast.error('Medicamento no encontrado');
+        console.error("Medication not found in array:", medicationId);
+        toast.error("Medicamento no encontrado");
         return;
       }
 
-      const logData = {
-        user_id: user.id,
-        medication_id: medicationId,
-        scheduled_date: format(date, 'yyyy-MM-dd'),
-        time: time,
-        taken_at: new Date().toISOString(),
-        notes: 'Tomado desde el calendario'
-      };
-
-      await createMedicationLog(logData);
-      
-      // Create notification for medication taken
-      await NotificationService.createMedicationTakenNotification(
-        user.id,
-        medication.name,
-        medication.dosage
+      // Find the current schedule to get the scheduled date
+      const currentSchedule = dosageSchedules.find(
+        (schedule) => schedule.id === scheduleId
       );
-      
-      // Show browser notification
-      NotificationService.showBrowserNotification(
-        '✅ Medicación tomada',
+      const scheduledDate =
+        currentSchedule?.scheduled_time || new Date().toISOString();
+
+      // Update the schedule status
+      const { error: updateError } = await db.updateScheduleStatus(
+        scheduleId,
+        "taken"
+      );
+      if (updateError) {
+        console.error("Error updating schedule status:", updateError);
+        toast.error("Error al actualizar el estado");
+        return;
+      }
+
+      // Create intake log for statistics
+      console.log("Creating intake log for medication:", medicationId);
+      console.log("Scheduled date:", scheduledDate);
+
+      const { data: logData, error: logError } = await db.createIntakeLog(
+        medicationId,
         {
-          body: `Has confirmado la toma de ${medication.name} (${medication.dosage})`,
-          icon: '/meditrack-icon.svg',
-          badge: '/meditrack-badge.svg'
+          taken_at: new Date().toISOString(),
+          scheduled_time: scheduledDate,
+          status: "taken",
+          notes: "Tomado desde calendario",
         }
       );
-      
-      toast.success('Medicamento marcado como tomado');
+
+      console.log("Intake log creation result:", { logData, logError });
+
+      if (logError) {
+        console.error("Error creating intake log:", logError);
+        // Don't fail the operation if log creation fails, but show warning
+        toast.warning(
+          "Medicamento marcado como tomado, pero hubo un error al registrar la estadística"
+        );
+      } else {
+        console.log("Intake log created successfully:", logData);
+        toast.success("Medicamento marcado como tomado");
+      }
+
       loadData();
     } catch (error) {
-      console.error('Error marking as taken:', error);
-      toast.error('Error al marcar como tomado');
+      console.error("Error marking as taken:", error);
+      toast.error("Error al marcar como tomado");
     }
   };
 
-  const navigateWeek = (direction: 'prev' | 'next') => {
-    setCurrentDate(prev => direction === 'prev' ? subDays(prev, 7) : addDays(prev, 7));
+  const navigateWeek = (direction: "prev" | "next") => {
+    setCurrentDate((prev) =>
+      direction === "prev" ? subDays(prev, 7) : addDays(prev, 7)
+    );
   };
 
   const navigateToToday = () => {
@@ -170,8 +268,12 @@ export default function Calendar() {
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-8">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Calendario de Medicamentos</h1>
-          <p className="text-xl text-gray-600">Visualiza y gestiona tu horario semanal de medicamentos</p>
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">
+            Calendario de Medicamentos
+          </h1>
+          <p className="text-xl text-gray-600">
+            Visualiza y gestiona tu horario semanal de medicamentos
+          </p>
         </div>
 
         {/* Navigation */}
@@ -179,7 +281,7 @@ export default function Calendar() {
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <button
-                onClick={() => navigateWeek('prev')}
+                onClick={() => navigateWeek("prev")}
                 className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors min-h-[44px]"
                 aria-label="Semana anterior"
               >
@@ -192,7 +294,7 @@ export default function Calendar() {
                 Hoy
               </button>
               <button
-                onClick={() => navigateWeek('next')}
+                onClick={() => navigateWeek("next")}
                 className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors min-h-[44px]"
                 aria-label="Semana siguiente"
               >
@@ -201,104 +303,169 @@ export default function Calendar() {
             </div>
             <div className="text-center">
               <h2 className="text-2xl font-semibold text-gray-900">
-                {format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'MMMM yyyy', { locale: es })}
+                {format(
+                  startOfWeek(currentDate, { weekStartsOn: 1 }),
+                  "MMMM yyyy",
+                  { locale: es }
+                )}
               </h2>
               <p className="text-lg text-gray-600">
-                Semana del {format(startOfWeek(currentDate, { weekStartsOn: 1 }), 'd')} al {format(endOfWeek(currentDate, { weekStartsOn: 1 }), 'd')}
+                Semana del{" "}
+                {format(startOfWeek(currentDate, { weekStartsOn: 1 }), "d")} al{" "}
+                {format(endOfWeek(currentDate, { weekStartsOn: 1 }), "d")}
               </p>
             </div>
           </div>
         </div>
 
-        {/* Week View */}
+        {/* Week View - Redesigned as List */}
         <div className="bg-white rounded-lg shadow-sm overflow-hidden">
-          <div className="grid grid-cols-1 lg:grid-cols-7 gap-0">
+          <div className="divide-y divide-gray-200">
             {weekSchedule.map((day, index) => {
               const isToday = isSameDay(day.date, new Date());
-              const isSelected = selectedDate && isSameDay(day.date, selectedDate);
+              const isSelected =
+                selectedDate && isSameDay(day.date, selectedDate);
               const hasMedications = day.medications.length > 0;
-              const allTaken = day.medications.length > 0 && day.medications.every(med => med.taken);
-              
+              const allTaken =
+                day.medications.length > 0 &&
+                day.medications.every((med) => med.taken);
+              const takenCount = day.medications.filter(
+                (med) => med.taken
+              ).length;
+
               return (
                 <div
                   key={index}
-                  className={`border-r border-gray-200 last:border-r-0 ${
-                    isToday ? 'bg-green-50' : isSelected ? 'bg-blue-50' : 'bg-white'
+                  className={`p-6 ${
+                    isToday
+                      ? "bg-green-50"
+                      : isSelected
+                      ? "bg-blue-50"
+                      : "bg-white"
                   }`}
                 >
                   {/* Day Header */}
                   <div
-                    className={`p-4 border-b border-gray-200 cursor-pointer transition-colors ${
-                      isToday ? 'bg-green-100' : isSelected ? 'bg-blue-100' : 'hover:bg-gray-50'
-                    }`}
+                    className={`flex items-center justify-between mb-4 cursor-pointer transition-colors ${
+                      isToday
+                        ? "bg-green-100"
+                        : isSelected
+                        ? "bg-blue-100"
+                        : "hover:bg-gray-50"
+                    } p-4 rounded-lg`}
                     onClick={() => setSelectedDate(day.date)}
                   >
-                    <div className="text-center">
-                      <div className="text-sm font-medium text-gray-500 mb-1">
-                        {format(day.date, 'EEE', { locale: es })}
+                    <div className="flex items-center gap-4">
+                      <div className="text-center">
+                        <div className="text-lg font-medium text-gray-500 mb-1">
+                          {format(day.date, "EEE", { locale: es })}
+                        </div>
+                        <div
+                          className={`text-3xl font-bold ${
+                            isToday ? "text-green-600" : "text-gray-900"
+                          }`}
+                        >
+                          {format(day.date, "d")}
+                        </div>
                       </div>
-                      <div className={`text-2xl font-bold ${
-                        isToday ? 'text-green-600' : 'text-gray-900'
-                      }`}>
-                        {format(day.date, 'd')}
-                      </div>
+
                       {hasMedications && (
-                        <div className="mt-2 flex justify-center">
+                        <div className="flex items-center gap-2">
                           {allTaken ? (
-                            <CheckCircle className="w-5 h-5 text-green-600" />
+                            <CheckCircle className="w-6 h-6 text-green-600" />
                           ) : (
-                            <Circle className="w-5 h-5 text-gray-400" />
+                            <Circle className="w-6 h-6 text-gray-400" />
                           )}
+                          <span className="text-sm font-medium text-gray-600">
+                            {takenCount}/{day.medications.length} tomados
+                          </span>
                         </div>
                       )}
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-green-600">
+                        {hasMedications
+                          ? Math.round(
+                              (takenCount / day.medications.length) * 100
+                            )
+                          : 0}
+                        %
+                      </div>
+                      <div className="text-sm text-gray-500">adherencia</div>
                     </div>
                   </div>
 
                   {/* Day Medications */}
-                  <div className="p-4 min-h-[200px]">
+                  <div className="">
                     {day.medications.length === 0 ? (
                       <div className="text-center text-gray-500 py-8">
                         <Pill className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p className="text-sm">Sin medicamentos</p>
+                        <p className="text-sm">
+                          Sin medicamentos programados para este día
+                        </p>
                       </div>
                     ) : (
-                      <div className="space-y-3">
+                      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                         {day.medications.map((med, medIndex) => (
                           <div
                             key={medIndex}
-                            className={`p-3 rounded-lg border transition-all ${
+                            className={`p-4 rounded-lg border transition-all ${
                               med.taken
-                                ? 'bg-green-50 border-green-200'
-                                : 'bg-gray-50 border-gray-200 hover:bg-gray-100'
+                                ? "bg-green-50 border-green-200"
+                                : "bg-white border-gray-200 hover:bg-gray-50"
                             }`}
                           >
-                            <div className="flex items-center justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Clock className="w-4 h-4 text-gray-600" />
-                                <span className="font-semibold text-gray-900">
-                                  {med.schedule.time}
+                            <div className="flex items-center justify-between mb-3">
+                              <div className="flex items-center gap-3">
+                                <Clock className="w-5 h-5 text-gray-600" />
+                                <span className="font-semibold text-gray-900 text-lg">
+                                  {format(
+                                    new Date(med.schedule.scheduled_time),
+                                    "HH:mm"
+                                  )}
                                 </span>
                               </div>
                               {med.taken ? (
-                                <CheckCircle className="w-5 h-5 text-green-600" />
+                                <div className="flex items-center gap-2">
+                                  <CheckCircle className="w-6 h-6 text-green-600" />
+                                  <span className="text-sm font-medium text-green-600">
+                                    Tomado
+                                  </span>
+                                </div>
                               ) : (
                                 <button
-                                  onClick={() => handleMarkAsTaken(med.medication.id, day.date, med.schedule.time)}
-                                  className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors min-h-[32px]"
+                                  onClick={() =>
+                                    handleMarkAsTaken(
+                                      med.schedule.id,
+                                      med.medication.id
+                                    )
+                                  }
+                                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]"
                                 >
                                   Tomar
                                 </button>
                               )}
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Pill className="w-4 h-4 text-green-600" />
-                              <div>
-                                <div className="font-medium text-gray-900 text-sm">
-                                  {med.medication.name}
+
+                            <div className="flex items-start gap-3">
+                              <Pill className="w-5 h-5 text-green-600 mt-1" />
+                              <div className="flex-1">
+                                <div className="font-medium text-gray-900 text-base mb-1">
+                                  {med.medication.generic_name}
                                 </div>
-                                <div className="text-xs text-gray-600">
-                                  {med.schedule.dose} {med.medication.dosage_unit}
+                                <div className="text-sm text-gray-600 mb-2">
+                                  {med.schedule.dose_amount}
                                 </div>
+                                {med.medication.end_date && (
+                                  <div className="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">
+                                    Hasta:{" "}
+                                    {format(
+                                      new Date(med.medication.end_date),
+                                      "dd/MM/yyyy"
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             </div>
                           </div>
@@ -316,14 +483,17 @@ export default function Calendar() {
         {selectedDate && (
           <div className="mt-8 bg-white rounded-lg shadow-sm p-6">
             <h3 className="text-2xl font-semibold text-gray-900 mb-4">
-              Detalles del {format(selectedDate, 'EEEE d \'de\' MMMM', { locale: es })}
+              Detalles del{" "}
+              {format(selectedDate, "EEEE d 'de' MMMM", { locale: es })}
             </h3>
-            
+
             {(() => {
-              const dayMeds = weekSchedule.find(day => isSameDay(day.date, selectedDate))?.medications || [];
-              const takenCount = dayMeds.filter(med => med.taken).length;
+              const dayMeds =
+                weekSchedule.find((day) => isSameDay(day.date, selectedDate))
+                  ?.medications || [];
+              const takenCount = dayMeds.filter((med) => med.taken).length;
               const totalCount = dayMeds.length;
-              
+
               return (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
@@ -336,10 +506,13 @@ export default function Calendar() {
                       </div>
                     </div>
                     <div className="text-3xl font-bold text-green-600">
-                      {totalCount > 0 ? Math.round((takenCount / totalCount) * 100) : 0}%
+                      {totalCount > 0
+                        ? Math.round((takenCount / totalCount) * 100)
+                        : 0}
+                      %
                     </div>
                   </div>
-                  
+
                   {dayMeds.length > 0 && (
                     <div className="grid gap-3">
                       {dayMeds.map((med, index) => (
@@ -347,14 +520,16 @@ export default function Calendar() {
                           key={index}
                           className={`flex items-center justify-between p-4 rounded-lg border ${
                             med.taken
-                              ? 'bg-green-50 border-green-200'
-                              : 'bg-white border-gray-200'
+                              ? "bg-green-50 border-green-200"
+                              : "bg-white border-gray-200"
                           }`}
                         >
                           <div className="flex items-center gap-4">
-                            <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                              med.taken ? 'bg-green-600' : 'bg-gray-300'
-                            }`}>
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                                med.taken ? "bg-green-600" : "bg-gray-300"
+                              }`}
+                            >
                               {med.taken ? (
                                 <CheckCircle className="w-5 h-5 text-white" />
                               ) : (
@@ -363,16 +538,34 @@ export default function Calendar() {
                             </div>
                             <div>
                               <div className="font-semibold text-gray-900">
-                                {med.medication.name}
+                                {med.medication.generic_name}
                               </div>
                               <div className="text-sm text-gray-600">
-                                {med.schedule.time} - {med.schedule.dose} {med.medication.dosage_unit}
+                                {format(
+                                  new Date(med.schedule.scheduled_time),
+                                  "HH:mm"
+                                )}{" "}
+                                - {med.schedule.dose_amount}
                               </div>
+                              {med.medication.end_date && (
+                                <div className="text-xs text-gray-500">
+                                  Hasta:{" "}
+                                  {format(
+                                    new Date(med.medication.end_date),
+                                    "dd/MM/yyyy"
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                           {!med.taken && (
                             <button
-                              onClick={() => handleMarkAsTaken(med.medication.id, selectedDate, med.schedule.time)}
+                              onClick={() =>
+                                handleMarkAsTaken(
+                                  med.schedule.id,
+                                  med.medication.id
+                                )
+                              }
                               className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]"
                             >
                               Marcar como tomado

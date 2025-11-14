@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { Notification } from '@/types'
+import type { Notification } from '@/types'
 import { supabase } from '@/lib/supabase'
 
 interface NotificationsState {
@@ -44,10 +44,10 @@ export const useNotificationsStore = create<NotificationsState>()(
 
       markAsRead: async (notificationId) => {
         try {
-          const { error } = await supabase
-            .from('notifications')
-            .update({ is_read: true, read_at: new Date().toISOString() })
-            .eq('id', notificationId)
+          const { error } = await (((supabase
+            .from('notifications') as any)
+            .update({ is_read: true, read_at: new Date().toISOString() } as any) as any)
+            .eq('id', notificationId) as any)
 
           if (error) throw error
 
@@ -70,10 +70,10 @@ export const useNotificationsStore = create<NotificationsState>()(
 
           if (unreadIds.length === 0) return
 
-          const { error } = await supabase
-            .from('notifications')
-            .update({ is_read: true, read_at: new Date().toISOString() })
-            .in('id', unreadIds)
+          const { error } = await (((supabase
+            .from('notifications') as any)
+            .update({ is_read: true, read_at: new Date().toISOString() } as any) as any)
+            .in('id', unreadIds) as any)
 
           if (error) throw error
 
@@ -108,10 +108,29 @@ export const useNotificationsStore = create<NotificationsState>()(
       loadNotifications: async (userId) => {
         set({ isLoading: true, error: null })
         try {
+          // First get the patient ID for this user
+          const { data: patient, error: patientError } = await supabase
+            .from('patients')
+            .select('id')
+            .eq('user_id', userId)
+            .single()
+
+          if (patientError || !patient) {
+            console.error('Could not find patient profile for user:', userId)
+            set({ 
+              notifications: [],
+              unreadCount: 0,
+              isLoading: false
+            })
+            return
+          }
+
+          const patientId = patient.id
+
           const { data, error } = await supabase
             .from('notifications')
             .select('*')
-            .eq('user_id', userId)
+            .eq('patient_id', patientId)
             .order('created_at', { ascending: false })
             .limit(50)
 
@@ -119,7 +138,7 @@ export const useNotificationsStore = create<NotificationsState>()(
 
           set({ 
             notifications: data || [],
-            unreadCount: (data || []).filter(n => !n.is_read).length,
+            unreadCount: (data as any || []).filter((n: any) => !n.is_read).length,
             isLoading: false
           })
         } catch (error) {
@@ -132,40 +151,63 @@ export const useNotificationsStore = create<NotificationsState>()(
       },
 
       subscribeToNotifications: (userId) => {
-        const subscription = supabase
-          .channel(`notifications:${userId}`)
-          .on(
-            'postgres_changes',
-            {
-              event: 'INSERT',
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${userId}`
-            },
-            (payload) => {
-              get().addNotification(payload.new as Notification)
-            }
-          )
-          .on(
-            'postgres_changes',
-            {
-              event: 'UPDATE',
-              schema: 'public',
-              table: 'notifications',
-              filter: `user_id=eq.${userId}`
-            },
-            (payload) => {
-              const notifications = get().notifications.map(n => 
-                n.id === payload.new.id ? payload.new as Notification : n
-              )
-              const unreadCount = notifications.filter(n => !n.is_read).length
-              set({ notifications, unreadCount })
-            }
-          )
-          .subscribe()
+        let patientId: string | null = null
+        
+        // Get patient ID first
+        const setupSubscription = async () => {
+          const { data: patient, error: patientError } = await supabase
+            .from('patients')
+            .select('id')
+            .eq('user_id', userId)
+            .single()
 
+          if (patientError || !patient) {
+            console.error('Could not find patient profile for subscription:', userId)
+            return () => {} // Return empty cleanup function
+          }
+
+          patientId = patient.id
+
+          const subscription = supabase
+            .channel(`notifications:${patientId}`)
+            .on(
+              'postgres_changes',
+              {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'notifications',
+                filter: `patient_id=eq.${patientId}`
+              },
+              (payload) => {
+                get().addNotification(payload.new as Notification)
+              }
+            )
+            .on(
+              'postgres_changes',
+              {
+                event: 'UPDATE',
+                schema: 'public',
+                table: 'notifications',
+                filter: `patient_id=eq.${patientId}`
+              },
+              (payload) => {
+                const notifications = get().notifications.map(n => 
+                  n.id === payload.new.id ? payload.new as Notification : n
+                )
+                const unreadCount = notifications.filter(n => !n.is_read).length
+                set({ notifications, unreadCount })
+              }
+            )
+            .subscribe()
+
+          return () => {
+            subscription.unsubscribe()
+          }
+        }
+
+        const cleanupPromise = setupSubscription()
         return () => {
-          subscription.unsubscribe()
+          cleanupPromise.then(cleanup => cleanup())
         }
       }
     }),

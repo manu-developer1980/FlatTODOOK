@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useAuthStore } from '@/stores/auth'
 import { useNotificationsStore } from '@/stores/notifications'
-import { NotificationService } from '@/services/notificationService'
-import { Notification, NotificationType } from '@/types'
+// import { NotificationService } from '@/services/notificationService'
+import type { Notification } from '@/types'
+import { NotificationType } from '@/types'
 import { formatDistanceToNow } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { 
@@ -36,32 +37,28 @@ export default function Notifications() {
   const [isProcessing, setIsProcessing] = useState<string | null>(null)
 
   useEffect(() => {
-    if (user?.id) {
-      loadNotifications(user.id)
-      const unsubscribe = subscribeToNotifications(user.id)
+    if (user?.user_id) {
+      loadNotifications(user.user_id)
+      const unsubscribe = subscribeToNotifications(user.user_id)
       return unsubscribe
     }
-  }, [user?.id, loadNotifications, subscribeToNotifications])
+  }, [user?.user_id, loadNotifications, subscribeToNotifications])
 
   useEffect(() => {
     // Request browser notification permission
-    NotificationService.requestNotificationPermission()
+    // NotificationService.requestNotificationPermission()
   }, [])
 
-  const getNotificationIcon = (type: NotificationType) => {
+  const getNotificationIcon = (type: string) => {
     switch (type) {
-      case NotificationType.MEDICATION_REMINDER:
+      case 'medication_reminder':
         return <Clock className="h-6 w-6 text-blue-600" />
-      case NotificationType.MEDICATION_TAKEN:
+      case 'appointment_reminder':
         return <CheckCircle className="h-6 w-6 text-green-600" />
-      case NotificationType.MISSED_MEDICATION:
+      case 'refill_reminder':
         return <AlertTriangle className="h-6 w-6 text-orange-600" />
-      case NotificationType.CAREGIVER_INVITATION:
+      case 'system_alert':
         return <Users className="h-6 w-6 text-purple-600" />
-      case NotificationType.BADGE_EARNED:
-        return <Award className="h-6 w-6 text-yellow-600" />
-      case NotificationType.STREAK_MILESTONE:
-        return <Flame className="h-6 w-6 text-red-600" />
       default:
         return <Bell className="h-6 w-6 text-gray-600" />
     }
@@ -115,7 +112,7 @@ export default function Notifications() {
             <h2 className="text-xl font-semibold text-red-800 mb-2">Error al cargar notificaciones</h2>
             <p className="text-red-600">{error}</p>
             <button
-              onClick={() => user?.id && loadNotifications(user.id)}
+              onClick={() => user?.user_id && loadNotifications(user.user_id)}
               className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
             >
               Reintentar
@@ -239,7 +236,7 @@ export default function Notifications() {
         {notifications.length > 0 && notifications.length % 50 === 0 && (
           <div className="text-center mt-8">
             <button
-              onClick={() => user?.id && loadNotifications(user.id)}
+              onClick={() => user?.user_id && loadNotifications(user.user_id)}
               className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               Cargar más notificaciones

@@ -1,0 +1,265 @@
+Checking current session...
+auth.ts:176 Checking current session...
+useNotificationScheduler.ts:67 Service Worker registered: ServiceWorkerRegistration {installing: null, waiting: null, active: ServiceWorker, navigationPreload: NavigationPreloadManager, scope: 'http://localhost:5173/', …}
+useNotificationScheduler.ts:67 Service Worker registered: ServiceWorkerRegistration {installing: null, waiting: null, active: ServiceWorker, navigationPreload: NavigationPreloadManager, scope: 'http://localhost:5173/', …}
+2useNotificationScheduler.ts:79 Existing push subscription found
+auth.ts:179 Session check result: {session: {…}, error: null}
+auth.ts:187 Session found, user: 8d71428d-8f6e-43b7-8fbb-c989676e59aa
+auth.ts:188 Fetching user profile for session user...
+supabase.ts:112 Getting user profile for userId: 8d71428d-8f6e-43b7-8fbb-c989676e59aa
+auth.ts:179 Session check result: {session: {…}, error: null}
+auth.ts:187 Session found, user: 8d71428d-8f6e-43b7-8fbb-c989676e59aa
+auth.ts:188 Fetching user profile for session user...
+supabase.ts:112 Getting user profile for userId: 8d71428d-8f6e-43b7-8fbb-c989676e59aa
+supabase.ts:116 Current session: {access_token: 'eyJhbGciOiJIUzI1NiIsImtpZCI6Imd2T0dkelRxSFYxVGdoOT…sc2V9.3ByjQQfnE7Sk8c-OvCkFa_idgn0rFME0RF1VcHDwvdw', token_type: 'bearer', expires_in: 3600, expires_at: 1763117352, refresh_token: 'y7l3f2co7bhr', …}
+supabase.ts:117 Session error: null
+supabase.ts:124 Making request to patients table with user_id: 8d71428d-8f6e-43b7-8fbb-c989676e59aa
+supabase.ts:116 Current session: {access_token: 'eyJhbGciOiJIUzI1NiIsImtpZCI6Imd2T0dkelRxSFYxVGdoOT…sc2V9.3ByjQQfnE7Sk8c-OvCkFa_idgn0rFME0RF1VcHDwvdw', token_type: 'bearer', expires_in: 3600, expires_at: 1763117352, refresh_token: 'y7l3f2co7bhr', …}
+supabase.ts:117 Session error: null
+supabase.ts:124 Making request to patients table with user_id: 8d71428d-8f6e-43b7-8fbb-c989676e59aa
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+installHook.js:1 You may test your Stripe.js integration over HTTP. However, live Stripe.js integrations must use HTTPS.
+overrideMethod @ installHook.js:1
+value @ stripe.js:1
+e @ stripe.js:1
+og @ stripe.js:1
+initStripe2 @ @stripe_stripe-js.js?v=de39278a:121
+(anonymous) @ @stripe_stripe-js.js?v=de39278a:151
+Promise.then
+loadStripe2 @ @stripe_stripe-js.js?v=de39278a:150
+(anonymous) @ SubscriptionManager.tsx:8Understand this warning
+installHook.js:1 Could not find patient profile for user: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+loadNotifications @ notifications.ts:119
+await in loadNotifications
+(anonymous) @ useNotificationScheduler.ts:18
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+commitPassiveMountOnFiber @ chunk-F34GCA6J.js?v=de39278a:18206
+commitPassiveMountEffects_complete @ chunk-F34GCA6J.js?v=de39278a:18179
+commitPassiveMountEffects_begin @ chunk-F34GCA6J.js?v=de39278a:18169
+commitPassiveMountEffects @ chunk-F34GCA6J.js?v=de39278a:18159
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19543
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:19381
+workLoop @ chunk-F34GCA6J.js?v=de39278a:197
+flushWork @ chunk-F34GCA6J.js?v=de39278a:176
+performWorkUntilDeadline @ chunk-F34GCA6J.js?v=de39278a:384Understand this error
+installHook.js:1 Could not find patient profile for subscription: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+setupSubscription @ notifications.ts:165
+await in setupSubscription
+subscribeToNotifications @ notifications.ts:208
+(anonymous) @ useNotificationScheduler.ts:21
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+commitPassiveMountOnFiber @ chunk-F34GCA6J.js?v=de39278a:18206
+commitPassiveMountEffects_complete @ chunk-F34GCA6J.js?v=de39278a:18179
+commitPassiveMountEffects_begin @ chunk-F34GCA6J.js?v=de39278a:18169
+commitPassiveMountEffects @ chunk-F34GCA6J.js?v=de39278a:18159
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19543
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:19381
+workLoop @ chunk-F34GCA6J.js?v=de39278a:197
+flushWork @ chunk-F34GCA6J.js?v=de39278a:176
+performWorkUntilDeadline @ chunk-F34GCA6J.js?v=de39278a:384Understand this error
+installHook.js:1 Could not find patient profile for subscription: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+setupSubscription @ notifications.ts:165
+await in setupSubscription
+subscribeToNotifications @ notifications.ts:208
+(anonymous) @ useNotificationScheduler.ts:21
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+invokePassiveEffectMountInDEV @ chunk-F34GCA6J.js?v=de39278a:18374
+invokeEffectsInDev @ chunk-F34GCA6J.js?v=de39278a:19754
+commitDoubleInvokeEffectsInDEV @ chunk-F34GCA6J.js?v=de39278a:19739
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19556
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:19381
+workLoop @ chunk-F34GCA6J.js?v=de39278a:197
+flushWork @ chunk-F34GCA6J.js?v=de39278a:176
+performWorkUntilDeadline @ chunk-F34GCA6J.js?v=de39278a:384Understand this error
+installHook.js:1 Could not find patient profile for user: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+loadNotifications @ notifications.ts:119
+await in loadNotifications
+(anonymous) @ useNotificationScheduler.ts:18
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+invokePassiveEffectMountInDEV @ chunk-F34GCA6J.js?v=de39278a:18374
+invokeEffectsInDev @ chunk-F34GCA6J.js?v=de39278a:19754
+commitDoubleInvokeEffectsInDEV @ chunk-F34GCA6J.js?v=de39278a:19739
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19556
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:19381
+workLoop @ chunk-F34GCA6J.js?v=de39278a:197
+flushWork @ chunk-F34GCA6J.js?v=de39278a:176
+performWorkUntilDeadline @ chunk-F34GCA6J.js?v=de39278a:384Understand this error
+supabase.ts:126 Patients query result: {error: null, data: {…}, count: null, status: 200, statusText: ''}
+auth.ts:191 User profile fetch result: {userData: {…}, userError: null}
+supabase.ts:126 Patients query result: {error: null, data: {…}, count: null, status: 200, statusText: ''}
+auth.ts:191 User profile fetch result: {userData: {…}, userError: null}
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/user_stats?select=*&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+auth.ts:209 Session check completed successfully
+useNotificationScheduler.ts:67 Service Worker registered: ServiceWorkerRegistration {installing: null, waiting: null, active: ServiceWorker, navigationPreload: NavigationPreloadManager, scope: 'http://localhost:5173/', …}
+useNotificationScheduler.ts:67 Service Worker registered: ServiceWorkerRegistration {installing: null, waiting: null, active: ServiceWorker, navigationPreload: NavigationPreloadManager, scope: 'http://localhost:5173/', …}
+2useNotificationScheduler.ts:79 Existing push subscription found
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/user_stats?select=*&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+auth.ts:209 Session check completed successfully
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+installHook.js:1 Could not find patient profile for user: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+loadNotifications @ notifications.ts:119
+await in loadNotifications
+(anonymous) @ useNotificationScheduler.ts:18
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+invokePassiveEffectMountInDEV @ chunk-F34GCA6J.js?v=de39278a:18374
+invokeEffectsInDev @ chunk-F34GCA6J.js?v=de39278a:19754
+commitDoubleInvokeEffectsInDEV @ chunk-F34GCA6J.js?v=de39278a:19739
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19556
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+commitRootImpl @ chunk-F34GCA6J.js?v=de39278a:19469
+commitRoot @ chunk-F34GCA6J.js?v=de39278a:19330
+performSyncWorkOnRoot @ chunk-F34GCA6J.js?v=de39278a:18948
+flushSyncCallbacks @ chunk-F34GCA6J.js?v=de39278a:9166
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:18677Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+installHook.js:1 Could not find patient profile for subscription: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+setupSubscription @ notifications.ts:165
+await in setupSubscription
+subscribeToNotifications @ notifications.ts:208
+(anonymous) @ useNotificationScheduler.ts:21
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+commitPassiveMountOnFiber @ chunk-F34GCA6J.js?v=de39278a:18206
+commitPassiveMountEffects_complete @ chunk-F34GCA6J.js?v=de39278a:18179
+commitPassiveMountEffects_begin @ chunk-F34GCA6J.js?v=de39278a:18169
+commitPassiveMountEffects @ chunk-F34GCA6J.js?v=de39278a:18159
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19543
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+commitRootImpl @ chunk-F34GCA6J.js?v=de39278a:19469
+commitRoot @ chunk-F34GCA6J.js?v=de39278a:19330
+performSyncWorkOnRoot @ chunk-F34GCA6J.js?v=de39278a:18948
+flushSyncCallbacks @ chunk-F34GCA6J.js?v=de39278a:9166
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:18677Understand this error
+installHook.js:1 Could not find patient profile for user: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+loadNotifications @ notifications.ts:119
+await in loadNotifications
+(anonymous) @ useNotificationScheduler.ts:18
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+commitPassiveMountOnFiber @ chunk-F34GCA6J.js?v=de39278a:18206
+commitPassiveMountEffects_complete @ chunk-F34GCA6J.js?v=de39278a:18179
+commitPassiveMountEffects_begin @ chunk-F34GCA6J.js?v=de39278a:18169
+commitPassiveMountEffects @ chunk-F34GCA6J.js?v=de39278a:18159
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19543
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+commitRootImpl @ chunk-F34GCA6J.js?v=de39278a:19469
+commitRoot @ chunk-F34GCA6J.js?v=de39278a:19330
+performSyncWorkOnRoot @ chunk-F34GCA6J.js?v=de39278a:18948
+flushSyncCallbacks @ chunk-F34GCA6J.js?v=de39278a:9166
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:18677Understand this error
+installHook.js:1 Could not find patient profile for subscription: 767b33f1-d5fb-45ec-975b-f50c6ad7a23f
+overrideMethod @ installHook.js:1
+setupSubscription @ notifications.ts:165
+await in setupSubscription
+subscribeToNotifications @ notifications.ts:208
+(anonymous) @ useNotificationScheduler.ts:21
+commitHookEffectListMount @ chunk-F34GCA6J.js?v=de39278a:16963
+invokePassiveEffectMountInDEV @ chunk-F34GCA6J.js?v=de39278a:18374
+invokeEffectsInDev @ chunk-F34GCA6J.js?v=de39278a:19754
+commitDoubleInvokeEffectsInDEV @ chunk-F34GCA6J.js?v=de39278a:19739
+flushPassiveEffectsImpl @ chunk-F34GCA6J.js?v=de39278a:19556
+flushPassiveEffects @ chunk-F34GCA6J.js?v=de39278a:19500
+commitRootImpl @ chunk-F34GCA6J.js?v=de39278a:19469
+commitRoot @ chunk-F34GCA6J.js?v=de39278a:19330
+performSyncWorkOnRoot @ chunk-F34GCA6J.js?v=de39278a:18948
+flushSyncCallbacks @ chunk-F34GCA6J.js?v=de39278a:9166
+(anonymous) @ chunk-F34GCA6J.js?v=de39278a:18677Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/patients?select=id&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+web-client-content-script.js:2 Uncaught TypeError: Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.
+    at HTMLIFrameElement.<anonymous> (web-client-content-script.js:2:1434139)
+(anonymous) @ web-client-content-script.js:2Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/user_stats?select=*&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/user_stats?select=*&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+@supabase_supabase-js.js?v=de39278a:6348  GET https://ovnnrejzzlscnidkvead.supabase.co/rest/v1/user_stats?select=*&user_id=eq.767b33f1-d5fb-45ec-975b-f50c6ad7a23f 406 (Not Acceptable)
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6348
+(anonymous) @ @supabase_supabase-js.js?v=de39278a:6366
+await in (anonymous)
+then @ @supabase_supabase-js.js?v=de39278a:606Understand this error
+web-client-content-script.js:2 Uncaught TypeError: Failed to execute 'observe' on 'MutationObserver': parameter 1 is not of type 'Node'.
+    at HTMLIFrameElement.<anonymous> (web-client-content-script.js:2:1434139)

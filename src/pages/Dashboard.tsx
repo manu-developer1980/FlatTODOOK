@@ -3,6 +3,7 @@ import { Pill, Clock, CheckCircle, AlertCircle, TrendingUp, Users } from 'lucide
 import { useAuthStore } from '../stores/auth';
 import { db } from '../lib/supabase';
 import LoadingSpinner from '../components/ui/LoadingSpinner';
+import { toast } from 'sonner';
 
 export default function Dashboard() {
   const { user } = useAuthStore();
@@ -16,16 +17,15 @@ export default function Dashboard() {
 
       try {
         // Cargar horario de hoy
-        const { data: scheduleData } = await db.getTodaySchedule(user.id);
+        const { data: scheduleData } = await db.getTodaySchedule(user.user_id);
         if (scheduleData) {
           setTodaySchedule(scheduleData);
         }
 
         // Cargar estadísticas básicas
-        const { data: statsData } = await db.getAdherenceStats(user.id, 'week');
-        if (statsData && statsData.length > 0) {
-          const recentStats = statsData[statsData.length - 1];
-          setStatistics(recentStats);
+        const { data: statsData } = await db.getAdherenceStats(user.user_id);
+        if (statsData) {
+          setStatistics(statsData);
         }
       } catch (error) {
         console.error('Error al cargar datos del dashboard:', error);
@@ -37,8 +37,79 @@ export default function Dashboard() {
     loadDashboardData();
   }, [user]);
 
-  const pendingMedications = todaySchedule.filter(med => med.status === 'pending');
-  const takenMedications = todaySchedule.filter(med => med.status === 'taken');
+  const handleMarkAsTaken = async (scheduleId: string, medicationId: string) => {
+    if (!user) return;
+
+    try {
+      // Get the current schedule to find the scheduled date
+      const { data: scheduleData } = await db.getTodaySchedule(user.user_id);
+      const currentSchedule = scheduleData?.find((item: any) => item.id === scheduleId);
+      const scheduledDate = currentSchedule?.scheduled_time || new Date().toISOString();
+
+      // Update the schedule status
+      const { error: updateError } = await db.updateScheduleStatus(scheduleId, 'taken');
+      if (updateError) {
+        console.error('Error updating schedule status:', updateError);
+        toast.error('Error al actualizar el estado');
+        return;
+      }
+
+      // Create intake log for statistics
+      console.log('Creating intake log for medication:', medicationId);
+      console.log('Scheduled date:', scheduledDate);
+      console.log('Current user:', user.user_id);
+      
+      const intakeLogData = {
+        taken_at: new Date().toISOString(),
+        scheduled_time: scheduledDate,
+        status: 'taken',
+        notes: 'Tomado desde dashboard'
+      };
+      
+      console.log('Intake log data:', intakeLogData);
+      
+      const { data: logData, error: logError } = await db.createIntakeLog(medicationId, intakeLogData);
+
+      console.log('Intake log creation result:', { logData, logError });
+      
+      if (logError) {
+        console.error('Detailed error:', JSON.stringify(logError, null, 2));
+      }
+
+      if (logError) {
+        console.error('Error creating intake log:', logError);
+        // Don't fail the operation if log creation fails, but show warning
+        toast.warning('Medicamento marcado como tomado, pero hubo un error al registrar la estadística');
+      } else {
+        console.log('Intake log created successfully:', logData);
+        toast.success('Medicamento marcado como tomado');
+      }
+      
+      // Reload data
+      const { data: newScheduleData } = await db.getTodaySchedule(user.user_id);
+      if (newScheduleData) {
+        setTodaySchedule(newScheduleData);
+      }
+    } catch (error) {
+      console.error('Error marking as taken:', error);
+      toast.error('Error al marcar como tomado');
+    }
+  };
+
+  const getMedicationStatus = (medication: any) => {
+    if (medication.is_taken) return 'taken';
+    
+    const scheduledTime = new Date(medication.scheduled_time);
+    const now = new Date();
+    
+    // If scheduled time is in the past and not taken, it's omitted
+    if (scheduledTime < now) return 'omitted';
+    
+    return 'pending';
+  };
+
+  const pendingMedications = todaySchedule.filter((med: any) => !med.is_taken);
+  const takenMedications = todaySchedule.filter((med: any) => med.is_taken);
   const adherenceRate = statistics ? statistics.adherence_rate : 0;
 
   if (loading) {
@@ -56,7 +127,7 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-gray-900">
-              ¡Hola, {user?.full_name?.split(' ')[0] || 'Usuario'}! 👋
+              ¡Hola, {(user as any)?.first_name ? (user as any).first_name : (user as any)?.user_metadata?.full_name?.split(' ')[0] || 'Usuario'}! 👋
             </h1>
             <p className="text-gray-600 mt-2">
               {new Date().toLocaleDateString('es-ES', {
@@ -131,9 +202,9 @@ export default function Dashboard() {
       <div className="bg-white rounded-xl shadow-lg p-6">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Medicaciones de Hoy</h2>
-          <span className="text-sm text-gray-500">
-            {takenMedications.length} de {todaySchedule.length} completadas
-          </span>
+              <span className="text-sm text-gray-500">
+                {takenMedications.length} de {todaySchedule.length} completadas
+              </span>
         </div>
 
         {todaySchedule.length === 0 ? (
@@ -143,13 +214,13 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="space-y-4">
-            {todaySchedule.map((medication) => (
+            {todaySchedule.map((medication: any) => (
               <div
                 key={medication.id}
                 className={`p-4 rounded-lg border-2 ${
-                  medication.status === 'taken'
+                  medication.is_taken
                     ? 'bg-green-50 border-green-200'
-                    : medication.status === 'pending'
+                    : !medication.is_taken
                     ? 'bg-blue-50 border-blue-200'
                     : 'bg-gray-50 border-gray-200'
                 }`}
@@ -157,13 +228,13 @@ export default function Dashboard() {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
                     <div className={`rounded-full p-2 ${
-                      medication.status === 'taken'
+                      medication.is_taken
                         ? 'bg-green-100'
-                        : medication.status === 'pending'
+                        : !medication.is_taken
                         ? 'bg-blue-100'
                         : 'bg-gray-100'
                     }`}>
-                      {medication.status === 'taken' ? (
+                      {medication.is_taken ? (
                         <CheckCircle className="w-6 h-6 text-green-600" />
                       ) : (
                         <Clock className="w-6 h-6 text-blue-600" />
@@ -171,7 +242,7 @@ export default function Dashboard() {
                     </div>
                     <div>
                       <h3 className="text-lg font-semibold text-gray-900">
-                        {medication.medications.name}
+                        {medication.medications?.generic_name || medication.medications?.name || 'Medicamento'}
                       </h3>
                       <p className="text-gray-600">
                         {medication.dose_amount} - {new Date(medication.scheduled_time).toLocaleTimeString('es-ES', {
@@ -182,15 +253,23 @@ export default function Dashboard() {
                     </div>
                   </div>
                   <div className="text-right">
-                    {medication.status === 'taken' ? (
-                      <span className="text-green-600 font-semibold">Tomada</span>
-                    ) : medication.status === 'pending' ? (
-                      <button className="bg-primary text-white px-4 py-2 rounded-lg font-semibold hover:bg-primary-dark transition-colors">
-                        Tomar
-                      </button>
-                    ) : (
-                      <span className="text-gray-600">Omitida</span>
-                    )}
+                    {(() => {
+                      const status = getMedicationStatus(medication);
+                      if (status === 'taken') {
+                        return <span className="text-green-600 font-semibold">Tomada</span>;
+                      } else if (status === 'pending') {
+                        return (
+                          <button 
+                            onClick={() => handleMarkAsTaken(medication.id, medication.medication_id)}
+                            className="bg-primary text-white px-4 py-2 rounded-lg font-semibold hover:bg-primary-dark transition-colors"
+                          >
+                            Tomar
+                          </button>
+                        );
+                      } else {
+                        return <span className="text-gray-600">Omitida</span>;
+                      }
+                    })()}
                   </div>
                 </div>
               </div>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { User, Mail, Phone, Calendar, Edit2, Save, X } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
-import { updateUserProfile } from '../lib/supabase';
+import { db } from '../lib/supabase';
 import { toast } from 'sonner';
 
 export default function Profile() {
-  const { user, updateProfile } = useAuthStore();
+  const { user } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [formData, setFormData] = useState({
@@ -20,12 +20,12 @@ export default function Profile() {
   useEffect(() => {
     if (user) {
       setFormData({
-        full_name: user.user_metadata?.full_name || '',
-        email: user.email || '',
-        phone: user.user_metadata?.phone || '',
-        birth_date: user.user_metadata?.birth_date || '',
-        emergency_contact: user.user_metadata?.emergency_contact || '',
-        emergency_phone: user.user_metadata?.emergency_phone || ''
+        full_name: (user as any)?.first_name ? `${(user as any).first_name} ${(user as any).last_name || ''}`.trim() : (user as any)?.user_metadata?.full_name || '',
+        email: (user as any)?.email || (user as any)?.user_email || '',
+        phone: (user as any)?.phone_number || (user as any)?.user_metadata?.phone || '',
+        birth_date: (user as any)?.date_of_birth || (user as any)?.user_metadata?.birth_date || '',
+        emergency_contact: (user as any)?.emergency_contact_name || (user as any)?.user_metadata?.emergency_contact || '',
+        emergency_phone: (user as any)?.emergency_contact_phone || (user as any)?.user_metadata?.emergency_phone || ''
       });
     }
   }, [user]);
@@ -36,12 +36,18 @@ export default function Profile() {
 
     try {
       setLoading(true);
-      await updateProfile({
-        full_name: formData.full_name,
-        phone: formData.phone,
-        birth_date: formData.birth_date,
-        emergency_contact: formData.emergency_contact,
-        emergency_phone: formData.emergency_phone
+      // Split full name into first and last name
+      const nameParts = formData.full_name.trim().split(' ');
+      const first_name = nameParts[0] || '';
+      const last_name = nameParts.slice(1).join(' ') || '';
+      
+      await db.updateUser((user as any).user_id, {
+        first_name,
+        last_name,
+        phone_number: formData.phone,
+        date_of_birth: formData.birth_date,
+        emergency_contact_name: formData.emergency_contact,
+        emergency_contact_phone: formData.emergency_phone
       });
       toast.success('Perfil actualizado correctamente');
       setIsEditing(false);
@@ -82,9 +88,9 @@ export default function Profile() {
               </div>
               <div>
                 <h2 className="text-2xl font-semibold text-gray-900">
-                  {user.user_metadata?.full_name || 'Usuario'}
+                  {(user as any)?.first_name ? `${(user as any).first_name} ${(user as any).last_name || ''}`.trim() : (user as any)?.user_metadata?.full_name || 'Usuario'}
                 </h2>
-                <p className="text-gray-600">{user.email}</p>
+                <p className="text-gray-600">{(user as any)?.email || (user as any)?.user_email || 'usuario@ejemplo.com'}</p>
               </div>
             </div>
             {!isEditing && (

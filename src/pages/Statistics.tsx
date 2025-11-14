@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { TrendingUp, Pill, Clock, Award, Calendar, CheckCircle } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
-import { getMedications, getMedicationLogs } from '../lib/supabase';
-import { Medication, MedicationLog } from '../types';
+import { db } from '../lib/supabase';
+import { Medication, IntakeLog } from '@/types/database';
 import { format, subDays, startOfWeek, endOfWeek, eachDayOfInterval, parseISO, isSameDay } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -38,8 +38,8 @@ const COLORS = ['#2E8B57', '#FF6B35', '#4A90E2', '#F5A623', '#7ED321', '#9013FE'
 
 export default function Statistics() {
   const { user } = useAuthStore();
-  const [medications, setMedications] = useState<Medication[]>([]);
-  const [medicationLogs, setMedicationLogs] = useState<MedicationLog[]>([]);
+  const [medications, setMedications] = useState<any[]>([]);
+  const [intakeLogs, setIntakeLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [timeRange, setTimeRange] = useState<'week' | 'month' | '3months'>('month');
   const [statistics, setStatistics] = useState<StatisticsData>({
@@ -58,22 +58,39 @@ export default function Statistics() {
     loadData();
   }, [user, timeRange]);
 
+  // Also load data when component mounts (in case data changed from other pages)
+  useEffect(() => {
+    const handleFocus = () => {
+      if (user) {
+        loadData();
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [user]);
+
   useEffect(() => {
     calculateStatistics();
-  }, [medications, medicationLogs, timeRange]);
+  }, [medications, intakeLogs, timeRange]);
 
   const loadData = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
-      const [medsData, logsData] = await Promise.all([
-        getMedications(user.id),
-        getMedicationLogs(user.id)
+      console.log('Loading data for user:', user.user_id);
+      
+      const [medsResponse, logsResponse] = await Promise.all([
+        db.getMedications(user.user_id),
+        db.getIntakeLogs(user.user_id)
       ]);
       
-      setMedications(medsData || []);
-      setMedicationLogs(logsData || []);
+      console.log('Medications response:', medsResponse);
+      console.log('Intake logs response:', logsResponse);
+      
+      setMedications(medsResponse.data || []);
+      setIntakeLogs(logsResponse.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error al cargar estadísticas');
@@ -83,8 +100,14 @@ export default function Statistics() {
   };
 
   const calculateStatistics = () => {
+    console.log('=== CALCULATING STATISTICS ===');
+    console.log('All medications:', medications);
+    console.log('All intake logs:', intakeLogs);
+    
     const activeMeds = medications.filter(med => med.is_active);
     const totalMeds = medications.length;
+    
+    console.log('Active medications:', activeMeds);
     
     // Calculate adherence rates
     const today = new Date();
@@ -92,22 +115,33 @@ export default function Statistics() {
                      timeRange === 'month' ? subDays(today, 30) :
                      subDays(today, 90);
 
-    const relevantLogs = medicationLogs.filter(log => 
-      parseISO(log.scheduled_date) >= startDate && parseISO(log.scheduled_date) <= today
-    );
+    console.log('Date range:', startDate, 'to', today);
+
+    const relevantLogs = intakeLogs.filter(log => {
+      const logDate = parseISO(log.scheduled_time);
+      const isInRange = logDate >= startDate && logDate <= today;
+      console.log(`Log ${log.id}: scheduled_time=${log.scheduled_time}, taken_at=${log.taken_at}, inRange=${isInRange}`);
+      return isInRange;
+    });
+
+    console.log('Relevant logs in date range:', relevantLogs);
 
     // Calculate expected doses
     let expectedDoses = 0;
     let takenDoses = relevantLogs.filter(log => log.taken_at).length;
 
+    console.log('Taken doses:', takenDoses);
+
     activeMeds.forEach(medication => {
-      if (medication.schedules) {
-        const daysInRange = eachDayOfInterval({ start: startDate, end: today });
-        expectedDoses += daysInRange.length * medication.schedules.length;
-      }
+      // Default to once daily for adherence calculation
+      const daysInRange = eachDayOfInterval({ start: startDate, end: today });
+      expectedDoses += daysInRange.length * 1; // Assume 1 dose per day per medication
     });
 
+    console.log('Expected doses:', expectedDoses);
+
     const adherenceRate = expectedDoses > 0 ? (takenDoses / expectedDoses) * 100 : 0;
+    console.log('Calculated adherence rate:', adherenceRate);
 
     // Calculate streaks
     const streaks = calculateStreaks();
@@ -117,13 +151,13 @@ export default function Statistics() {
     const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    const weeklyLogs = medicationLogs.filter(log => {
-      const logDate = parseISO(log.scheduled_date);
+    const weeklyLogs = intakeLogs.filter(log => {
+      const logDate = parseISO(log.scheduled_time);
       return logDate >= weekStart && logDate <= weekEnd;
     });
 
-    const monthlyLogs = medicationLogs.filter(log => {
-      const logDate = parseISO(log.scheduled_date);
+    const monthlyLogs = intakeLogs.filter(log => {
+      const logDate = parseISO(log.scheduled_time);
       return logDate >= monthStart && logDate <= today;
     });
 
@@ -148,7 +182,7 @@ export default function Statistics() {
   };
 
   const calculateStreaks = () => {
-    const sortedLogs = medicationLogs
+    const sortedLogs = intakeLogs
       .filter(log => log.taken_at)
       .sort((a, b) => parseISO(b.taken_at!).getTime() - parseISO(a.taken_at!).getTime());
 
@@ -196,7 +230,7 @@ export default function Statistics() {
     return { current: currentStreak, longest: longestStreak };
   };
 
-  const calculatePeriodAdherence = (logs: MedicationLog[], medications: Medication[]) => {
+  const calculatePeriodAdherence = (logs: any[], medications: any[]) => {
     const takenLogs = logs.filter(log => log.taken_at);
     const expectedDoses = medications.reduce((total, med) => {
       return total + (med.schedules?.length || 0);
@@ -210,13 +244,11 @@ export default function Statistics() {
     const activeMeds = medications.filter(med => med.is_active);
     
     const dailyData: DailyAdherence[] = days.map(day => {
-      const dayLogs = medicationLogs.filter(log => 
-        isSameDay(parseISO(log.scheduled_date), day)
+      const dayLogs = intakeLogs.filter(log => 
+        isSameDay(parseISO(log.scheduled_time), day)
       );
       
-      const expectedDoses = activeMeds.reduce((total, med) => {
-        return total + (med.schedules?.length || 0);
-      }, 0);
+      const expectedDoses = activeMeds.length; // Default to 1 dose per medication per day
       
       const takenDoses = dayLogs.filter(log => log.taken_at).length;
       
@@ -232,13 +264,34 @@ export default function Statistics() {
   };
 
   const calculateMedicationStats = (activeMeds: Medication[]) => {
+    console.log('Active medications:', activeMeds);
+    console.log('Intake logs:', intakeLogs);
+    
+    if (!intakeLogs || intakeLogs.length === 0) {
+      console.log('No intake logs found');
+      return;
+    }
+    
     const stats: MedicationStats[] = activeMeds.map((medication, index) => {
-      const medLogs = medicationLogs.filter(log => log.medication_id === medication.id);
+      console.log(`Processing medication: ${medication.generic_name} (ID: ${medication.id})`);
+      
+      const medLogs = intakeLogs.filter(log => {
+        console.log(`Comparing log medication_id: ${log.medication_id} with medication id: ${medication.id}`);
+        console.log(`Types - log.medication_id: ${typeof log.medication_id}, medication.id: ${typeof medication.id}`);
+        console.log(`Are they equal? ${log.medication_id === medication.id}`);
+        return log.medication_id === medication.id;
+      });
+      
+      console.log(`Found ${medLogs.length} logs for medication ${medication.generic_name}`);
+      console.log('Matching logs:', medLogs);
+      
       const takenLogs = medLogs.filter(log => log.taken_at);
-      const expectedDoses = (medication.schedules?.length || 0) * 30; // Rough monthly estimate
+      const expectedDoses = 30; // Default to once daily for 30 days as rough estimate
+      
+      console.log(`Medication ${medication.generic_name}: ${takenLogs.length}/${expectedDoses} taken`);
       
       return {
-        name: medication.name,
+        name: medication.generic_name,
         adherence: expectedDoses > 0 ? (takenLogs.length / expectedDoses) * 100 : 0,
         taken: takenLogs.length,
         total: expectedDoses,
@@ -393,13 +446,13 @@ export default function Statistics() {
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
                     <Pie
-                      data={medicationStats}
+                      data={medicationStats as any}
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
                       fill="#8884d8"
                       dataKey="adherence"
-                      label={({ name, adherence }) => `${name}: ${Math.round(adherence)}%`}
+                      label={({ name, value }: any) => `${name}: ${Math.round(value)}%`}
                     >
                       {medicationStats.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.color} />
@@ -437,7 +490,7 @@ export default function Statistics() {
         <div className="bg-white rounded-lg shadow-sm p-6">
           <h3 className="text-xl font-semibold text-gray-900 mb-6">Actividad Reciente</h3>
           <div className="space-y-4">
-            {medicationLogs
+            {intakeLogs
               .filter(log => log.taken_at)
               .sort((a, b) => parseISO(b.taken_at!).getTime() - parseISO(a.taken_at!).getTime())
               .slice(0, 5)
@@ -450,7 +503,7 @@ export default function Statistics() {
                     <CheckCircle className="w-6 h-6 text-green-600" />
                     <div className="flex-1">
                       <div className="font-medium text-gray-900">
-                        {medication.name} - {log.dose} {medication.dosage_unit}
+                        {medication.generic_name} - {log.dose_amount} {medication.dosage_unit}
                       </div>
                       <div className="text-sm text-gray-600">
                         {format(parseISO(log.taken_at!), 'dd/MM/yyyy HH:mm', { locale: es })}
@@ -460,7 +513,7 @@ export default function Statistics() {
                   </div>
                 );
               })}
-            {medicationLogs.filter(log => log.taken_at).length === 0 && (
+            {intakeLogs.filter(log => log.taken_at).length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 <Pill className="w-12 h-12 mx-auto mb-4 opacity-50" />
                 <p className="text-lg">No hay actividad reciente</p>

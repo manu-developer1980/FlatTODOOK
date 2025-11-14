@@ -1,75 +1,74 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { Plus, Minus, Clock, Pill, Save, X } from 'lucide-react';
-import { useAuthStore } from '../../stores/auth';
-import { createMedication, updateMedication, getMedication } from '../../lib/supabase';
-import { Medication, MedicationSchedule } from '../../types';
-import { toast } from 'sonner';
-
-interface MedicationFormData {
-  name: string;
-  description: string;
-  dosage_amount: number;
-  dosage_unit: string;
-  form: string;
-  frequency_type: string;
-  start_date: string;
-  end_date?: string;
-  is_active: boolean;
-  notes?: string;
-  schedules: MedicationSchedule[];
-}
+import React, { useState, useEffect } from "react";
+import { useNavigate, useParams } from "react-router-dom";
+import { Plus, Minus, Clock, Pill, Save, X } from "lucide-react";
+import { useAuthStore } from "../../stores/auth";
+import { db } from "../../lib/supabase";
+import { Medication, MedicationFormData, Patient } from "../../types";
+import { toast } from "sonner";
 
 const dosageUnits = [
-  { value: 'mg', label: 'mg (miligramos)' },
-  { value: 'g', label: 'g (gramos)' },
-  { value: 'ml', label: 'ml (mililitros)' },
-  { value: 'gotas', label: 'Gotas' },
-  { value: 'cucharadas', label: 'Cucharadas' },
-  { value: 'cucharaditas', label: 'Cucharaditas' },
-  { value: 'comprimidos', label: 'Comprimidos' },
-  { value: 'cápsulas', label: 'Cápsulas' },
-  { value: 'inyecciones', label: 'Inyecciones' },
+  { value: "mg", label: "mg (miligramos)" },
+  { value: "g", label: "g (gramos)" },
+  { value: "ml", label: "ml (mililitros)" },
+  { value: "gotas", label: "Gotas" },
+  { value: "cucharadas", label: "Cucharadas" },
+  { value: "cucharaditas", label: "Cucharaditas" },
+  { value: "comprimidos", label: "Comprimidos" },
+  { value: "cápsulas", label: "Cápsulas" },
+  { value: "inyecciones", label: "Inyecciones" },
 ];
 
 const medicationForms = [
-  { value: 'pill', label: 'Pastilla/Comprimido' },
-  { value: 'capsule', label: 'Cápsula' },
-  { value: 'liquid', label: 'Líquido' },
-  { value: 'injection', label: 'Inyección' },
-  { value: 'drops', label: 'Gotas' },
-  { value: 'cream', label: 'Crema' },
-  { value: 'ointment', label: 'Pomada' },
-  { value: 'inhaler', label: 'Inhalador' },
-  { value: 'patch', label: 'Parche' },
+  { value: "tablet", label: "Tableta" },
+  { value: "capsule", label: "Cápsula" },
+  { value: "liquid", label: "Líquido" },
+  { value: "injection", label: "Inyección" },
+  { value: "cream", label: "Crema" },
+  { value: "ointment", label: "Pomada" },
+  { value: "inhaler", label: "Inhalador" },
+  { value: "drops", label: "Gotas" },
+  { value: "patch", label: "Parche" },
+  { value: "suppository", label: "Supositorio" },
 ];
 
 const frequencyTypes = [
-  { value: 'daily', label: 'Una vez al día' },
-  { value: 'twice_daily', label: 'Dos veces al día' },
-  { value: 'three_times_daily', label: 'Tres veces al día' },
-  { value: 'four_times_daily', label: 'Cuatro veces al día' },
-  { value: 'as_needed', label: 'Cuando sea necesario' },
-  { value: 'custom', label: 'Horario personalizado' },
+  { value: "daily", label: "Una vez al día" },
+  { value: "twice_daily", label: "Dos veces al día" },
+  { value: "three_times_daily", label: "Tres veces al día" },
+  { value: "four_times_daily", label: "Cuatro veces al día" },
+  { value: "every_4_hours", label: "Cada 4 horas" },
+  { value: "every_6_hours", label: "Cada 6 horas" },
+  { value: "every_8_hours", label: "Cada 8 horas" },
+  { value: "every_12_hours", label: "Cada 12 horas" },
+  { value: "weekly", label: "Una vez por semana" },
+  { value: "monthly", label: "Una vez por mes" },
+  { value: "as_needed", label: "Cuando sea necesario" },
 ];
 
 export default function MedicationForm() {
   const navigate = useNavigate();
   const { id } = useParams();
   const { user } = useAuthStore();
-  
+
   const [loading, setLoading] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
+  const [patient, setPatient] = useState<Patient | null>(null);
   const [formData, setFormData] = useState<MedicationFormData>({
-    name: '',
-    description: '',
-    dosage_amount: 1,
-    dosage_unit: 'comprimidos',
-    form: 'pill',
-    frequency_type: 'daily',
-    start_date: new Date().toISOString().split('T')[0],
-    is_active: true,
-    schedules: [{ time: '09:00', dose: '1' }],
+    generic_name: "",
+    brand: "",
+    strength: "",
+    form: "tablet",
+    dosage: "",
+    frequency: "daily",
+    specific_times: ["09:00"],
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: "",
+    instructions: "",
+    prescribed_by: "",
+    pharmacy_name: "",
+    pharmacy_phone: "",
+    refill_quantity: 0,
+    refill_remaining: 0,
   });
 
   useEffect(() => {
@@ -77,32 +76,55 @@ export default function MedicationForm() {
       setIsEdit(true);
       loadMedication();
     }
-  }, [id]);
+    loadPatient();
+  }, [id, user]);
+
+  const loadPatient = async () => {
+    if (!user) return;
+
+    try {
+      const response = await db.getUser(
+        user.user_id
+      );
+      if ((response as any).data) {
+        setPatient((response as any).data);
+      }
+    } catch (error) {
+      console.error("Error loading patient:", error);
+    }
+  };
 
   const loadMedication = async () => {
     if (!id || !user) return;
-    
+
     try {
       setLoading(true);
-      const medication = await getMedication(id);
-      if (medication && medication.user_id === user.id) {
+      const response = await db.getMedication(id);
+      if ((response as any).data) {
+        const medication = (response as any).data;
         setFormData({
-          name: medication.name,
-          description: medication.description,
-          dosage_amount: medication.dosage_amount,
-          dosage_unit: medication.dosage_unit,
+          generic_name: medication.generic_name,
+          brand: medication.brand || "",
+          strength: medication.strength || "",
           form: medication.form,
-          frequency_type: medication.frequency_type,
-          start_date: medication.start_date?.split('T')[0] || '',
-          end_date: medication.end_date?.split('T')[0] || '',
-          is_active: medication.is_active,
-          notes: medication.notes || '',
-          schedules: medication.schedules || [{ time: '09:00', dose: '1' }],
+          dosage: medication.dosage,
+          frequency: medication.frequency,
+          specific_times: medication.specific_times || ["09:00"],
+          start_date:
+            medication.start_date?.split("T")[0] ||
+            new Date().toISOString().split("T")[0],
+          end_date: medication.end_date?.split("T")[0] || "",
+          instructions: medication.instructions || "",
+          prescribed_by: medication.prescribed_by || "",
+          pharmacy_name: medication.pharmacy_name || "",
+          pharmacy_phone: medication.pharmacy_phone || "",
+          refill_quantity: medication.refill_quantity || 0,
+          refill_remaining: medication.refill_remaining || 0,
         });
       }
     } catch (error) {
-      console.error('Error loading medication:', error);
-      toast.error('Error al cargar el medicamento');
+      console.error("Error loading medication:", error);
+      toast.error("Error al cargar el medicamento");
     } finally {
       setLoading(false);
     }
@@ -110,100 +132,103 @@ export default function MedicationForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || !patient) return;
 
     try {
       setLoading(true);
-      
+
       const medicationData = {
         ...formData,
-        user_id: user.id,
+        patient_id: patient.id,
         start_date: formData.start_date,
         end_date: formData.end_date || undefined,
+        is_active: true,
       };
 
       if (isEdit && id) {
-        await updateMedication(id, medicationData);
-        toast.success('Medicamento actualizado correctamente');
+        const response = await db.updateMedication(
+          id,
+          medicationData
+        );
+        if (response.data) {
+          toast.success("Medicamento actualizado correctamente");
+        } else {
+          throw new Error("Error al actualizar medicamento");
+        }
       } else {
-        await createMedication(medicationData);
-        toast.success('Medicamento creado correctamente');
+        const response = await db.createMedication(
+          user!.user_id,
+          medicationData
+        );
+        if (response.data) {
+          toast.success("Medicamento creado correctamente");
+        } else {
+          throw new Error("Error al crear medicamento");
+        }
       }
-      
-      navigate('/medications');
+
+      navigate("/medications");
     } catch (error) {
-      console.error('Error saving medication:', error);
-      toast.error('Error al guardar el medicamento');
+      console.error("Error saving medication:", error);
+      toast.error("Error al guardar el medicamento");
     } finally {
       setLoading(false);
     }
   };
 
-  const addSchedule = () => {
-    setFormData(prev => ({
+  const addTime = () => {
+    setFormData((prev) => ({
       ...prev,
-      schedules: [...prev.schedules, { time: '09:00', dose: '1' }]
+      specific_times: [...prev.specific_times, "09:00"],
     }));
   };
 
-  const removeSchedule = (index: number) => {
-    if (formData.schedules.length > 1) {
-      setFormData(prev => ({
+  const removeTime = (index: number) => {
+    if (formData.specific_times.length > 1) {
+      setFormData((prev) => ({
         ...prev,
-        schedules: prev.schedules.filter((_, i) => i !== index)
+        specific_times: prev.specific_times.filter((_, i) => i !== index),
       }));
     }
   };
 
-  const updateSchedule = (index: number, field: 'time' | 'dose', value: string) => {
-    setFormData(prev => ({
+  const updateTime = (index: number, value: string) => {
+    setFormData((prev) => ({
       ...prev,
-      schedules: prev.schedules.map((schedule, i) => 
-        i === index ? { ...schedule, [field]: value } : schedule
-      )
+      specific_times: prev.specific_times.map((time, i) =>
+        i === index ? value : time
+      ),
     }));
   };
 
-  const generateSchedules = () => {
-    let schedules: MedicationSchedule[] = [];
-    
-    switch (formData.frequency_type) {
-      case 'daily':
-        schedules = [{ time: '09:00', dose: '1' }];
+  const generateTimes = () => {
+    let times: string[] = [];
+
+    switch (formData.frequency) {
+      case "daily":
+        times = ["09:00"];
         break;
-      case 'twice_daily':
-        schedules = [
-          { time: '08:00', dose: '1' },
-          { time: '20:00', dose: '1' }
-        ];
+      case "twice_daily":
+        times = ["08:00", "20:00"];
         break;
-      case 'three_times_daily':
-        schedules = [
-          { time: '08:00', dose: '1' },
-          { time: '14:00', dose: '1' },
-          { time: '20:00', dose: '1' }
-        ];
+      case "three_times_daily":
+        times = ["08:00", "14:00", "20:00"];
         break;
-      case 'four_times_daily':
-        schedules = [
-          { time: '08:00', dose: '1' },
-          { time: '12:00', dose: '1' },
-          { time: '16:00', dose: '1' },
-          { time: '20:00', dose: '1' }
-        ];
+      case "four_times_daily":
+        times = ["08:00", "12:00", "16:00", "20:00"];
         break;
       default:
-        schedules = formData.schedules;
+        times = formData.specific_times;
     }
-    
-    setFormData(prev => ({ ...prev, schedules }));
+
+    setFormData((prev) => ({ ...prev, specific_times: times }));
   };
 
   useEffect(() => {
-    if (formData.frequency_type !== 'as_needed' && formData.frequency_type !== 'custom') {
-      generateSchedules();
+    if ((formData.frequency as string) !== "as_needed") {
+      generateTimes();
     }
-  }, [formData.frequency_type]);
+  }, [formData.frequency]);
 
   if (loading && isEdit) {
     return (
@@ -222,16 +247,19 @@ export default function MedicationForm() {
         {/* Header */}
         <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
-            {isEdit ? 'Editar Medicamento' : 'Añadir Nuevo Medicamento'}
+            {isEdit ? "Editar Medicamento" : "Añadir Nuevo Medicamento"}
           </h1>
           <p className="text-xl text-gray-600">
-            {isEdit 
-              ? 'Actualiza la información de tu medicamento' 
-              : 'Registra un nuevo medicamento con sus horarios y detalles'}
+            {isEdit
+              ? "Actualiza la información de tu medicamento"
+              : "Registra un nuevo medicamento con sus horarios y detalles"}
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-8"
+        >
           {/* Basic Information */}
           <div className="bg-white rounded-lg shadow-sm p-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
@@ -240,98 +268,213 @@ export default function MedicationForm() {
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Name */}
+              {/* Generic Name */}
               <div className="md:col-span-2">
-                <label htmlFor="name" className="block text-lg font-medium text-gray-700 mb-3">
-                  Nombre del Medicamento *
+                <label
+                  htmlFor="generic_name"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Nombre Genérico *
                 </label>
                 <input
                   type="text"
-                  id="name"
+                  id="generic_name"
                   required
-                  value={formData.name}
-                  onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                  value={formData.generic_name}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      generic_name: e.target.value,
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   placeholder="Ej: Paracetamol, Ibuprofeno..."
-                  aria-describedby="name-help"
+                  aria-describedby="generic-name-help"
                 />
-                <p id="name-help" className="mt-2 text-sm text-gray-500">
-                  Escribe el nombre común o la marca del medicamento
+                <p
+                  id="generic-name-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
+                  Escribe el nombre genérico del medicamento
                 </p>
               </div>
 
-              {/* Description */}
-              <div className="md:col-span-2">
-                <label htmlFor="description" className="block text-lg font-medium text-gray-700 mb-3">
-                  Descripción *
+              {/* Brand */}
+              <div className="md:col-span-1">
+                <label
+                  htmlFor="brand"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Marca
                 </label>
-                <textarea
-                  id="description"
-                  required
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                <input
+                  type="text"
+                  id="brand"
+                  value={formData.brand || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, brand: e.target.value }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  rows={3}
-                  placeholder="¿Para qué sirve este medicamento?"
-                  aria-describedby="description-help"
+                  placeholder="Tylenol, Advil..."
                 />
-                <p id="description-help" className="mt-2 text-sm text-gray-500">
-                  Describe brevemente el propósito del medicamento
-                </p>
+              </div>
+
+              {/* Prescribed By */}
+              <div className="md:col-span-1">
+                <label
+                  htmlFor="prescribed_by"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Médico que lo recetó
+                </label>
+                <input
+                  type="text"
+                  id="prescribed_by"
+                  value={formData.prescribed_by || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      prescribed_by: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Dr. García, Dra. Martínez..."
+                />
               </div>
 
               {/* Form */}
               <div>
-                <label htmlFor="form" className="block text-lg font-medium text-gray-700 mb-3">
+                <label
+                  htmlFor="form"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Forma del Medicamento
                 </label>
                 <select
                   id="form"
                   value={formData.form}
-                  onChange={(e) => setFormData(prev => ({ ...prev, form: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      form: e.target.value as Medication["form"],
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 >
-                  {medicationForms.map(form => (
-                    <option key={form.value} value={form.value}>{form.label}</option>
+                  {medicationForms.map((form) => (
+                    <option
+                      key={form.value}
+                      value={form.value}
+                    >
+                      {form.label}
+                    </option>
                   ))}
                 </select>
               </div>
 
-              {/* Dosage Amount */}
+              {/* Strength */}
               <div>
-                <label htmlFor="dosage_amount" className="block text-lg font-medium text-gray-700 mb-3">
-                  Cantidad por Dosis
+                <label
+                  htmlFor="strength"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Concentración
                 </label>
                 <input
-                  type="number"
-                  id="dosage_amount"
-                  min="0.1"
-                  step="0.1"
-                  value={formData.dosage_amount}
-                  onChange={(e) => setFormData(prev => ({ ...prev, dosage_amount: parseFloat(e.target.value) }))}
+                  type="text"
+                  id="strength"
+                  required
+                  value={formData.strength}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      strength: e.target.value,
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="500mg, 10ml, etc."
+                  aria-describedby="strength-help"
+                />
+                <p
+                  id="strength-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
+                  Ej: 500mg, 10ml, 5%
+                </p>
+              </div>
+
+              {/* Dosage */}
+              <div className="md:col-span-2">
+                <label
+                  htmlFor="dosage"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Dosis *
+                </label>
+                <input
+                  type="text"
+                  id="dosage"
+                  required
+                  value={formData.dosage}
+                  onChange={(e) =>
+                    setFormData((prev) => ({ ...prev, dosage: e.target.value }))
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="1 comprimido, 2 cápsulas, 10ml, etc."
                   aria-describedby="dosage-help"
+                />
+                <p
+                  id="dosage-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
+                  Ej: 1 comprimido, 2 cápsulas, 10ml
+                </p>
+              </div>
+
+              {/* Pharmacy Name */}
+              <div className="md:col-span-1">
+                <label
+                  htmlFor="pharmacy_name"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Farmacia
+                </label>
+                <input
+                  type="text"
+                  id="pharmacy_name"
+                  value={formData.pharmacy_name || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      pharmacy_name: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="Farmacia Central, Farmacia 24h..."
                 />
               </div>
 
-              {/* Dosage Unit */}
-              <div>
-                <label htmlFor="dosage_unit" className="block text-lg font-medium text-gray-700 mb-3">
-                  Unidad de Medida
-                </label>
-                <select
-                  id="dosage_unit"
-                  value={formData.dosage_unit}
-                  onChange={(e) => setFormData(prev => ({ ...prev, dosage_unit: e.target.value }))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              {/* Pharmacy Phone */}
+              <div className="md:col-span-1">
+                <label
+                  htmlFor="pharmacy_phone"
+                  className="block text-lg font-medium text-gray-700 mb-3"
                 >
-                  {dosageUnits.map(unit => (
-                    <option key={unit.value} value={unit.value}>{unit.label}</option>
-                  ))}
-                </select>
-                <p id="dosage-help" className="mt-2 text-sm text-gray-500">
-                  Ej: 1 comprimido, 500mg, 10ml
-                </p>
+                  Teléfono de Farmacia
+                </label>
+                <input
+                  type="tel"
+                  id="pharmacy_phone"
+                  value={formData.pharmacy_phone || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      pharmacy_phone: e.target.value,
+                    }))
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  placeholder="+34 91 123 4567"
+                />
               </div>
             </div>
           </div>
@@ -344,30 +487,49 @@ export default function MedicationForm() {
             </h2>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Frequency Type */}
+              {/* Frequency */}
               <div className="md:col-span-2">
-                <label htmlFor="frequency_type" className="block text-lg font-medium text-gray-700 mb-3">
+                <label
+                  htmlFor="frequency"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Frecuencia de Toma *
                 </label>
                 <select
-                  id="frequency_type"
-                  value={formData.frequency_type}
-                  onChange={(e) => setFormData(prev => ({ ...prev, frequency_type: e.target.value }))}
+                  id="frequency"
+                  value={formData.frequency}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      frequency: e.target.value as Medication["frequency"],
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   aria-describedby="frequency-help"
                 >
-                  {frequencyTypes.map(freq => (
-                    <option key={freq.value} value={freq.value}>{freq.label}</option>
+                  {frequencyTypes.map((freq) => (
+                    <option
+                      key={freq.value}
+                      value={freq.value}
+                    >
+                      {freq.label}
+                    </option>
                   ))}
                 </select>
-                <p id="frequency-help" className="mt-2 text-sm text-gray-500">
+                <p
+                  id="frequency-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
                   Selecciona con qué frecuencia se debe tomar este medicamento
                 </p>
               </div>
 
               {/* Date Range */}
               <div>
-                <label htmlFor="start_date" className="block text-lg font-medium text-gray-700 mb-3">
+                <label
+                  htmlFor="start_date"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Fecha de Inicio *
                 </label>
                 <input
@@ -375,78 +537,84 @@ export default function MedicationForm() {
                   id="start_date"
                   required
                   value={formData.start_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, start_date: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      start_date: e.target.value,
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                 />
               </div>
 
               <div>
-                <label htmlFor="end_date" className="block text-lg font-medium text-gray-700 mb-3">
+                <label
+                  htmlFor="end_date"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Fecha de Fin (Opcional)
                 </label>
                 <input
                   type="date"
                   id="end_date"
                   value={formData.end_date}
-                  onChange={(e) => setFormData(prev => ({ ...prev, end_date: e.target.value }))}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      end_date: e.target.value,
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   aria-describedby="end-date-help"
                 />
-                <p id="end-date-help" className="mt-2 text-sm text-gray-500">
+                <p
+                  id="end-date-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
                   Déjalo vacío si el tratamiento es continuo
                 </p>
               </div>
             </div>
 
             {/* Custom Schedules */}
-            {(formData.frequency_type === 'custom' || formData.frequency_type === 'as_needed') && (
+            {(formData.frequency as string) !== "as_needed" && (
               <div className="mt-8">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-medium text-gray-900">Horarios Personalizados</h3>
-                  {formData.frequency_type === 'custom' && (
-                    <button
-                      type="button"
-                      onClick={addSchedule}
-                      className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors min-h-[44px]"
-                    >
-                      <Plus className="w-5 h-5" />
-                      Añadir Horario
-                    </button>
-                  )}
+                  <h3 className="text-lg font-medium text-gray-900">
+                    Horarios
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={addTime}
+                    className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors min-h-[44px]"
+                  >
+                    <Plus className="w-5 h-5" />
+                    Añadir Horario
+                  </button>
                 </div>
 
                 <div className="space-y-4">
-                  {formData.schedules.map((schedule, index) => (
-                    <div key={index} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                  {formData.specific_times.map((time, index) => (
+                    <div
+                      key={index}
+                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
+                    >
                       <div className="flex-1">
                         <label className="block text-sm font-medium text-gray-700 mb-2">
                           Hora
                         </label>
                         <input
                           type="time"
-                          value={schedule.time}
-                          onChange={(e) => updateSchedule(index, 'time', e.target.value)}
+                          value={time}
+                          onChange={(e) => updateTime(index, e.target.value)}
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                           required
                         />
                       </div>
-                      <div className="flex-1">
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Dosis
-                        </label>
-                        <input
-                          type="text"
-                          value={schedule.dose}
-                          onChange={(e) => updateSchedule(index, 'dose', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                          placeholder="Ej: 1, 500mg, 10ml"
-                          required
-                        />
-                      </div>
-                      {formData.schedules.length > 1 && (
+                      {formData.specific_times.length > 1 && (
                         <button
                           type="button"
-                          onClick={() => removeSchedule(index)}
+                          onClick={() => removeTime(index)}
                           className="mt-6 bg-red-100 hover:bg-red-200 text-red-700 p-2 rounded-lg transition-colors min-h-[44px]"
                           aria-label="Eliminar horario"
                         >
@@ -457,9 +625,10 @@ export default function MedicationForm() {
                   ))}
                 </div>
 
-                {formData.frequency_type === 'as_needed' && (
+                {(formData.frequency as string) === "as_needed" && (
                   <p className="mt-4 text-sm text-gray-500">
-                    Este medicamento se toma cuando sea necesario. Puedes añadir notas sobre cuándo tomarlo.
+                    Este medicamento se toma cuando sea necesario. Puedes añadir
+                    notas sobre cuándo tomarlo.
                   </p>
                 )}
               </div>
@@ -473,41 +642,35 @@ export default function MedicationForm() {
             </h2>
 
             <div className="space-y-6">
-              {/* Notes */}
+              {/* Instructions */}
               <div>
-                <label htmlFor="notes" className="block text-lg font-medium text-gray-700 mb-3">
-                  Notas Adicionales
+                <label
+                  htmlFor="instructions"
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
+                  Instrucciones
                 </label>
                 <textarea
-                  id="notes"
-                  value={formData.notes}
-                  onChange={(e) => setFormData(prev => ({ ...prev, notes: e.target.value }))}
+                  id="instructions"
+                  value={formData.instructions || ""}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      instructions: e.target.value,
+                    }))
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   rows={4}
                   placeholder="¿Alguna información importante sobre este medicamento?"
-                  aria-describedby="notes-help"
+                  aria-describedby="instructions-help"
                 />
-                <p id="notes-help" className="mt-2 text-sm text-gray-500">
+                <p
+                  id="instructions-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
                   Ej: "Tomar con comida", "Evitar alcohol", "Guardar en nevera"
                 </p>
               </div>
-
-              {/* Active Status */}
-              <div className="flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="is_active"
-                  checked={formData.is_active}
-                  onChange={(e) => setFormData(prev => ({ ...prev, is_active: e.target.checked }))}
-                  className="w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                />
-                <label htmlFor="is_active" className="text-lg font-medium text-gray-700">
-                  Este medicamento está activo
-                </label>
-              </div>
-              <p className="text-sm text-gray-500 ml-8">
-                Los medicamentos inactivos no generarán recordatorios
-              </p>
             </div>
           </div>
 
@@ -515,7 +678,7 @@ export default function MedicationForm() {
           <div className="flex flex-col sm:flex-row gap-4 justify-end">
             <button
               type="button"
-              onClick={() => navigate('/medications')}
+              onClick={() => navigate("/medications")}
               disabled={loading}
               className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-8 py-4 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px] disabled:opacity-50"
             >
@@ -528,7 +691,7 @@ export default function MedicationForm() {
               className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px] disabled:opacity-50"
             >
               <Save className="w-6 h-6" />
-              {loading ? 'Guardando...' : (isEdit ? 'Actualizar' : 'Crear')}
+              {loading ? "Guardando..." : isEdit ? "Actualizar" : "Crear"}
             </button>
           </div>
         </form>

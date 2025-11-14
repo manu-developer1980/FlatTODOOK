@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { User, Mail, Lock, Eye, EyeOff, ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth';
@@ -9,6 +9,8 @@ export default function Register() {
   const { signUp, loading } = useAuthStore();
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
+  const [cooldownSeconds, setCooldownSeconds] = useState<number>(0);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -18,6 +20,7 @@ export default function Register() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (cooldownUntil && Date.now() < cooldownUntil) return;
     
     if (formData.password !== formData.confirmPassword) {
       toast.error('Las contraseñas no coinciden');
@@ -30,17 +33,32 @@ export default function Register() {
     }
 
     try {
-      await signUp(formData.email, formData.password, {
-        full_name: formData.name,
-        display_name: formData.name
-      });
+      await signUp(formData.email, formData.password, formData.name);
       toast.success('¡Cuenta creada exitosamente! Por favor, revisa tu correo para confirmar tu cuenta.');
       navigate('/login');
     } catch (error) {
       console.error('Registration error:', error);
-      toast.error('Error al crear la cuenta. Por favor, intenta nuevamente.');
+      const message = (error as any)?.message || '';
+      if (typeof message === 'string' && message.toLowerCase().includes('rate limit')) {
+        setCooldownUntil(Date.now() + 60_000);
+        toast.error('Has alcanzado el límite de envíos de email. Inténtalo en 1 minuto o usa otro correo.');
+      } else {
+        toast.error('Error al crear la cuenta. Por favor, intenta nuevamente.');
+      }
     }
   };
+
+  useEffect(() => {
+    if (!cooldownUntil) return;
+    const update = () => {
+      const remainingMs = Math.max(0, cooldownUntil - Date.now());
+      setCooldownSeconds(Math.ceil(remainingMs / 1000));
+      if (remainingMs <= 0) setCooldownUntil(null);
+    };
+    update();
+    const t = setInterval(update, 500);
+    return () => clearInterval(t);
+  }, [cooldownUntil]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center px-4">
@@ -159,10 +177,10 @@ export default function Register() {
             {/* Submit Button */}
             <button
               type="submit"
-              disabled={loading}
+              disabled={loading || (cooldownUntil !== null && Date.now() < cooldownUntil)}
               className="w-full bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white font-semibold py-3 px-4 rounded-lg transition-colors text-lg min-h-[44px]"
             >
-              {loading ? 'Creando cuenta...' : 'Crear cuenta'}
+              {loading ? 'Creando cuenta...' : (cooldownUntil ? `Reintenta en ${cooldownSeconds}s` : 'Crear cuenta')}
             </button>
           </form>
 

@@ -12,11 +12,13 @@ import AuthLayout from "./components/layout/AuthLayout";
 import Home from "./pages/Home";
 import Login from "./pages/auth/Login";
 import Register from "./pages/auth/Register";
+import AuthCallback from "./pages/auth/AuthCallback";
 import Dashboard from "./pages/Dashboard";
 import Medications from "./pages/Medications";
 import MedicationForm from "./components/medications/MedicationForm";
 import Calendar from "./pages/Calendar";
 import Statistics from "./pages/Statistics";
+import DebugStats from "./pages/DebugStats";
 import Profile from "./pages/Profile";
 import Settings from "./pages/Settings";
 import Notifications from "./pages/Notifications";
@@ -32,7 +34,7 @@ const queryClient = new QueryClient({
     queries: {
       retry: 1,
       staleTime: 5 * 60 * 1000, // 5 minutes
-      cacheTime: 10 * 60 * 1000, // 10 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes
     },
   },
 });
@@ -63,6 +65,7 @@ function AppContent() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Route>
+        <Route path="/auth/callback" element={<AuthCallback />} />
 
         {/* Protected Routes */}
         <Route element={<ProtectedRoute />}>
@@ -73,6 +76,7 @@ function AppContent() {
             <Route path="/medications/edit/:id" element={<MedicationForm />} />
             <Route path="/calendar" element={<Calendar />} />
             <Route path="/statistics" element={<Statistics />} />
+            <Route path="/debug-stats" element={<DebugStats />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/settings" element={<Settings />} />

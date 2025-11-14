@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuthStore } from '@/stores/auth'
+import SubscriptionManager from '@/components/SubscriptionManager'
 import { 
   User, 
   Bell, 
@@ -9,7 +10,8 @@ import {
   Palette,
   Globe,
   Save,
-  LogOut
+  LogOut,
+  Settings as SettingsIcon
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -60,7 +62,7 @@ export default function Settings() {
                   </label>
                   <input
                     type="text"
-                    defaultValue={user?.full_name || ''}
+                    defaultValue={user?.user_metadata?.full_name || ''}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
                   />
                 </div>
@@ -241,75 +243,7 @@ export default function Settings() {
           </div>
         )
 
-      case 'subscription':
-        return (
-          <div className="space-y-6">
-            <div className="bg-gradient-to-r from-primary to-primary-light rounded-lg p-6 text-white">
-              <h3 className="text-xl font-semibold mb-2">Plan Actual</h3>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-2xl font-bold">Plan Gratuito</p>
-                  <p className="opacity-90">0€ / mes</p>
-                </div>
-                <button className="bg-white text-primary px-6 py-3 rounded-lg font-medium hover:bg-gray-100 transition-colors">
-                  Actualizar a Premium
-                </button>
-              </div>
-            </div>
 
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Características del Plan Gratuito</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">Hasta 5 medicamentos activos</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">Recordatorios básicos</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">1 cuidador</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-gray-700">Estadísticas básicas</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Características del Plan Premium (5€/mes)</h3>
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-gray-700">Medicamentos ilimitados</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-gray-700">Recordatorios avanzados personalizados</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-gray-700">Cuidadores ilimitados</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-gray-700">Estadísticas avanzadas y exportación</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-gray-700">Soporte prioritario</span>
-                </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 bg-primary rounded-full"></div>
-                  <span className="text-gray-700">Sin anuncios</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )
 
       case 'caregivers':
         return (
@@ -394,6 +328,9 @@ export default function Settings() {
           </div>
         )
 
+      case 'subscription':
+        return <SubscriptionManager />
+
       case 'language':
         return (
           <div className="space-y-6">
@@ -454,7 +391,7 @@ export default function Settings() {
         <div className="mb-8">
           <div className="flex items-center gap-3 mb-4">
             <div className="bg-primary p-3 rounded-full">
-              <Settings className="h-8 w-8 text-white" />
+              <SettingsIcon className="h-8 w-8 text-white" />
             </div>
             <div>
               <h1 className="text-3xl font-bold text-gray-900">Configuración</h1>

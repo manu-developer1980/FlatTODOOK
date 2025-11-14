@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Pill, Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useAuthStore } from '../../stores/auth';
@@ -8,7 +8,7 @@ export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const { signIn, loading } = useAuthStore();
+  const { signIn, loading, user } = useAuthStore();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -22,11 +22,17 @@ export default function Login() {
     try {
       await signIn(email, password);
       toast.success('¡Bienvenido de vuelta!');
-      navigate('/dashboard');
+      navigate('/dashboard', { replace: true });
     } catch (error) {
       // Error ya manejado en el store
     }
   };
+
+  useEffect(() => {
+    if (user) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [user, navigate]);
 
   return (
     <div className="space-y-6">
