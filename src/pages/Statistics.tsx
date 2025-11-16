@@ -74,23 +74,32 @@ export default function Statistics() {
     calculateStatistics();
   }, [medications, intakeLogs, timeRange]);
 
+  const [schedules, setSchedules] = useState<any[]>([]);
+
   const loadData = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
       console.log('Loading data for user:', user.user_id);
-      
-      const [medsResponse, logsResponse] = await Promise.all([
+      const today = new Date();
+      const startDate = timeRange === 'week' ? subDays(today, 7) :
+                       timeRange === 'month' ? subDays(today, 30) :
+                       subDays(today, 90);
+
+      const [medsResponse, logsResponse, schedulesResponse] = await Promise.all([
         db.getMedications(user.user_id),
-        db.getIntakeLogs(user.user_id)
+        db.getIntakeLogs(user.user_id),
+        (db as any).getSchedulesForDateRange(user.user_id, startDate, today)
       ]);
       
       console.log('Medications response:', medsResponse);
       console.log('Intake logs response:', logsResponse);
+      console.log('Schedules response:', schedulesResponse);
       
       setMedications(medsResponse.data || []);
       setIntakeLogs(logsResponse.data || []);
+      setSchedules((schedulesResponse as any).data || []);
     } catch (error) {
       console.error('Error loading data:', error);
       toast.error('Error al cargar estadísticas');
@@ -117,28 +126,18 @@ export default function Statistics() {
 
     console.log('Date range:', startDate, 'to', today);
 
-    const relevantLogs = intakeLogs.filter(log => {
-      const logDate = parseISO(log.scheduled_time);
-      const isInRange = logDate >= startDate && logDate <= today;
-      console.log(`Log ${log.id}: scheduled_time=${log.scheduled_time}, taken_at=${log.taken_at}, inRange=${isInRange}`);
-      return isInRange;
+    const relevantSchedules = schedules.filter(s => {
+      const d = parseISO(s.scheduled_time);
+      return d >= startDate && d <= today;
     });
 
-    console.log('Relevant logs in date range:', relevantLogs);
+    console.log('Relevant schedules in date range:', relevantSchedules);
 
     // Calculate expected doses
-    let expectedDoses = 0;
-    let takenDoses = relevantLogs.filter(log => log.taken_at).length;
+    const expectedDoses = relevantSchedules.length;
+    const takenDoses = relevantSchedules.filter((s: any) => s.is_taken).length;
 
     console.log('Taken doses:', takenDoses);
-
-    activeMeds.forEach(medication => {
-      // Default to once daily for adherence calculation
-      const daysInRange = eachDayOfInterval({ start: startDate, end: today });
-      expectedDoses += daysInRange.length * 1; // Assume 1 dose per day per medication
-    });
-
-    console.log('Expected doses:', expectedDoses);
 
     const adherenceRate = expectedDoses > 0 ? (takenDoses / expectedDoses) * 100 : 0;
     console.log('Calculated adherence rate:', adherenceRate);
@@ -151,18 +150,17 @@ export default function Statistics() {
     const weekEnd = endOfWeek(today, { weekStartsOn: 1 });
     const monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
     
-    const weeklyLogs = intakeLogs.filter(log => {
-      const logDate = parseISO(log.scheduled_time);
-      return logDate >= weekStart && logDate <= weekEnd;
+    const weeklySchedules = schedules.filter(s => {
+      const d = parseISO(s.scheduled_time);
+      return d >= weekStart && d <= weekEnd;
+    });
+    const monthlySchedules = schedules.filter(s => {
+      const d = parseISO(s.scheduled_time);
+      return d >= monthStart && d <= today;
     });
 
-    const monthlyLogs = intakeLogs.filter(log => {
-      const logDate = parseISO(log.scheduled_time);
-      return logDate >= monthStart && logDate <= today;
-    });
-
-    const weeklyAdherence = calculatePeriodAdherence(weeklyLogs, activeMeds);
-    const monthlyAdherence = calculatePeriodAdherence(monthlyLogs, activeMeds);
+    const weeklyAdherence = calculatePeriodAdherence(weeklySchedules);
+    const monthlyAdherence = calculatePeriodAdherence(monthlySchedules);
 
     setStatistics({
       totalMedications: totalMeds,
@@ -230,31 +228,31 @@ export default function Statistics() {
     return { current: currentStreak, longest: longestStreak };
   };
 
-  const calculatePeriodAdherence = (logs: any[], medications: any[]) => {
-    const takenLogs = logs.filter(log => log.taken_at);
-    const expectedDoses = medications.reduce((total, med) => {
-      return total + (med.schedules?.length || 0);
-    }, 0) * 7; // Assuming 7 days for weekly calculation
-
-    return expectedDoses > 0 ? (takenLogs.length / expectedDoses) * 100 : 0;
+  const calculatePeriodAdherence = (schedulesList: any[]) => {
+    const expected = schedulesList.length;
+    const taken = schedulesList.filter(s => s.is_taken).length;
+    const value = expected > 0 ? (taken / expected) * 100 : 0;
+    return Math.max(0, Math.min(100, value));
   };
 
   const calculateDailyAdherence = (startDate: Date, endDate: Date) => {
     const days = eachDayOfInterval({ start: startDate, end: endDate });
-    const activeMeds = medications.filter(med => med.is_active);
+    const schedulesByDay = schedules.reduce((acc: Record<string, any[]>, s: any) => {
+      const key = format(parseISO(s.scheduled_time), 'dd/MM');
+      acc[key] = acc[key] || [];
+      acc[key].push(s);
+      return acc;
+    }, {});
     
     const dailyData: DailyAdherence[] = days.map(day => {
-      const dayLogs = intakeLogs.filter(log => 
-        isSameDay(parseISO(log.scheduled_time), day)
-      );
-      
-      const expectedDoses = activeMeds.length; // Default to 1 dose per medication per day
-      
-      const takenDoses = dayLogs.filter(log => log.taken_at).length;
+      const key = format(day, 'dd/MM');
+      const daySchedules = schedulesByDay[key] || [];
+      const expectedDoses = daySchedules.length;
+      const takenDoses = daySchedules.filter((s: any) => s.is_taken).length;
       
       return {
-        date: format(day, 'dd/MM'),
-        adherence: expectedDoses > 0 ? (takenDoses / expectedDoses) * 100 : 0,
+        date: key,
+        adherence: expectedDoses > 0 ? Math.min(100, Math.max(0, (takenDoses / expectedDoses) * 100)) : 0,
         taken: takenDoses,
         total: expectedDoses
       };

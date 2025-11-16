@@ -452,6 +452,24 @@ export const db = {
           return ['08:00:00', '14:00:00', '20:00:00'];
         case 'four_times_daily':
           return ['06:00:00', '12:00:00', '18:00:00', '22:00:00'];
+        case 'every_4_hours': {
+          const times: string[] = [];
+          for (let h = 8; h < 24; h += 4) times.push(`${h.toString().padStart(2, '0')}:00:00`);
+          return times;
+        }
+        case 'every_6_hours': {
+          const times: string[] = [];
+          for (let h = 8; h < 24; h += 6) times.push(`${h.toString().padStart(2, '0')}:00:00`);
+          return times;
+        }
+        case 'every_8_hours': {
+          const times: string[] = [];
+          for (let h = 8; h < 24; h += 8) times.push(`${h.toString().padStart(2, '0')}:00:00`);
+          return times;
+        }
+        case 'every_12_hours': {
+          return ['08:00:00', '20:00:00'];
+        }
         case 'custom': {
           const n = Math.max(1, Math.min(8, timesPerDay || 1));
           const baseHour = 8; // start at 08:00

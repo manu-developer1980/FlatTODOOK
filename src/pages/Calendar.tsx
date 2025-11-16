@@ -466,9 +466,9 @@ export default function Calendar() {
                                   }
                                   disabled={new Date(med.schedule.scheduled_time).getTime() > Date.now() || !!processing[med.schedule.id]}
                                   title={new Date(med.schedule.scheduled_time).getTime() > Date.now() ? "No puedes marcar tomas futuras" : undefined}
-                                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]"
+                                  className={`${new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]`}
                                 >
-                                  Tomar
+                                  {new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'Pendiente' : 'Tomar'}
                                 </button>
                               )}
                             </div>
@@ -591,9 +591,11 @@ export default function Calendar() {
                                   med.medication.id
                                 )
                               }
-                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]"
+                              disabled={new Date(med.schedule.scheduled_time).getTime() > Date.now() || !!processing[med.schedule.id]}
+                              title={new Date(med.schedule.scheduled_time).getTime() > Date.now() ? "No puedes marcar tomas futuras" : undefined}
+                              className={`${new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]`}
                             >
-                              Marcar como tomado
+                              {new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'Pendiente' : 'Marcar como tomado'}
                             </button>
                           )}
                         </div>
