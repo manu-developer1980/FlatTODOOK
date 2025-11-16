@@ -349,6 +349,17 @@ export const db = {
     return result;
   },
 
+  getIntakeLogForMedicationAtTime: async (medicationId: string, scheduledIso: string) => {
+    const result = await supabase
+      .from('intake_logs')
+      .select('id')
+      .eq('medication_id', medicationId)
+      .eq('scheduled_time', scheduledIso)
+      .eq('status', 'taken')
+      .limit(1);
+    return result;
+  },
+
   createIntakeLog: async (medicationId: string, data: any) => {
     return supabase.from("intake_logs").insert({
       medication_id: medicationId,
@@ -430,32 +441,74 @@ export const db = {
 
     const items: any[] = [];
     const dayMs = 24 * 60 * 60 * 1000;
+
+    const defaultTimesForFrequency = (freq: string, timesPerDay?: number): string[] => {
+      switch (freq) {
+        case 'daily':
+          return ['08:00:00'];
+        case 'twice_daily':
+          return ['08:00:00', '20:00:00'];
+        case 'three_times_daily':
+          return ['08:00:00', '14:00:00', '20:00:00'];
+        case 'four_times_daily':
+          return ['06:00:00', '12:00:00', '18:00:00', '22:00:00'];
+        case 'custom': {
+          const n = Math.max(1, Math.min(8, timesPerDay || 1));
+          const baseHour = 8; // start at 08:00
+          const interval = Math.floor(24 / n);
+          const times: string[] = [];
+          for (let i = 0; i < n; i++) {
+            const h = (baseHour + i * interval) % 24;
+            const hh = h.toString().padStart(2, '0');
+            times.push(`${hh}:00:00`);
+          }
+          return times;
+        }
+        default:
+          return ['08:00:00'];
+      }
+    };
+
     for (let t = startDate.getTime(); t <= endDate.getTime(); t += dayMs) {
       const day = new Date(t);
       (medications as any[] || []).forEach((med) => {
-        if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
-          // Respect medication start/end window
-          const medStart = med.start_date ? new Date(med.start_date) : startDate;
-          // For continuous treatments (no end_date), extend to the requested endDate or 30 days from start
-          const defaultEndDate = med.start_date ? new Date(new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000) : endDate;
-          const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
-          if (day < medStart || day > medEnd) return;
+        const medStart = med.start_date ? new Date(med.start_date) : startDate;
+        const defaultEndDate = med.start_date ? new Date(new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000) : endDate;
+        const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
+        if (day < medStart || day > medEnd) return;
 
-          med.specific_times.forEach((time: string) => {
-            const parts = (time || '').split(':');
-            const h = parseInt(parts[0] || '0', 10);
-            const m2 = parseInt(parts[1] || '0', 10);
-            const s2 = parseInt(parts[2] || '0', 10);
-            const when = new Date(day);
-            when.setHours(h, m2, s2, 0);
-            items.push({
-              medication_id: med.id,
-              scheduled_time: when.toISOString(),
-              dose_amount: med.dosage,
-              is_taken: false,
-            });
-          });
+        let times: string[] = [];
+        if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+          times = med.specific_times as string[];
+        } else {
+          // Handle weekly/monthly/as_needed
+          if (med.frequency === 'weekly') {
+            if (day.getDay() !== new Date(medStart).getDay()) return;
+            times = defaultTimesForFrequency('daily');
+          } else if (med.frequency === 'monthly') {
+            if (day.getDate() !== new Date(medStart).getDate()) return;
+            times = defaultTimesForFrequency('daily');
+          } else if (med.frequency === 'as_needed') {
+            return; // do not auto-schedule PRN
+          } else {
+            times = defaultTimesForFrequency(med.frequency, med.times_per_day);
+          }
         }
+
+        times.forEach((time: string) => {
+          const parts = (time || '').split(':');
+          const h = parseInt(parts[0] || '0', 10);
+          const m2 = parseInt(parts[1] || '0', 10);
+          const s2 = parseInt(parts[2] || '0', 10);
+          const when = new Date(day);
+          when.setHours(h, m2, s2, 0);
+          items.push({
+            medication_id: med.id,
+            scheduled_time: when.toISOString(),
+            dose_amount: med.dosage,
+            is_taken: false,
+          });
+        });
       });
     }
 
