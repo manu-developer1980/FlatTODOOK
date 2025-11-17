@@ -42,8 +42,13 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
 // Auth helpers
 export const auth = {
   signUp: async (email: string, password: string, metadata: any) => {
-    console.log('Starting signup process for email:', email, 'with metadata:', metadata);
-    
+    console.log(
+      "Starting signup process for email:",
+      email,
+      "with metadata:",
+      metadata
+    );
+
     const result = await supabase.auth.signUp({
       email,
       password,
@@ -53,12 +58,15 @@ export const auth = {
       },
     });
 
-    console.log('Signup result:', result);
+    console.log("Signup result:", result);
 
     // Don't create patient profile here - wait for email confirmation
     // The patient profile will be created when user first logs in
     if (result.data.user && !result.error) {
-      console.log('Signup successful, patient profile will be created on first login for user:', result.data.user.id);
+      console.log(
+        "Signup successful, patient profile will be created on first login for user:",
+        result.data.user.id
+      );
     }
 
     return result;
@@ -109,66 +117,85 @@ export const auth = {
 export const db = {
   // Users - Get patient profile linked to auth user
   getUser: async (userId: string) => {
-    console.log('Getting user profile for userId:', userId);
-    
+    console.log("Getting user profile for userId:", userId);
+
     // Check if user is authenticated
-    const { data: { session }, error: sessionError } = await supabase.auth.getSession();
-    console.log('Current session:', session);
-    console.log('Session error:', sessionError);
-    
+    const {
+      data: { session },
+      error: sessionError,
+    } = await supabase.auth.getSession();
+    console.log("Current session:", session);
+    console.log("Session error:", sessionError);
+
     if (sessionError || !session) {
-      console.error('No valid session found');
-      return { data: null, error: { message: 'No authenticated session' } };
+      console.error("No valid session found");
+      return { data: null, error: { message: "No authenticated session" } };
     }
-    
-    console.log('Making request to patients table with user_id:', userId);
-    const result = await supabase.from("patients").select("*").eq("user_id", userId).single();
-    console.log('Patients query result:', result);
-    
+
+    console.log("Making request to patients table with user_id:", userId);
+    const result = await supabase
+      .from("patients")
+      .select("*")
+      .eq("user_id", userId)
+      .single();
+    console.log("Patients query result:", result);
+
     // If patient profile doesn't exist, create it
-    if (result.error && result.error.code === 'PGRST116') {
-      console.log('Patient profile not found, creating new profile for user:', userId);
-      
+    if (result.error && result.error.code === "PGRST116") {
+      console.log(
+        "Patient profile not found, creating new profile for user:",
+        userId
+      );
+
       // Get user metadata from auth
-      const { data: { user }, error: userError } = await supabase.auth.getUser();
+      const {
+        data: { user },
+        error: userError,
+      } = await supabase.auth.getUser();
       if (userError || !user) {
-        console.error('Could not get user metadata:', userError);
-        return { data: null, error: { message: 'Could not get user information' } };
+        console.error("Could not get user metadata:", userError);
+        return {
+          data: null,
+          error: { message: "Could not get user information" },
+        };
       }
-      
-      console.log('Creating patient profile directly');
-      
+
+      console.log("Creating patient profile directly");
+
       // Create patient profile directly
       const patientData = {
         user_id: userId,
-        first_name: user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuario',
-        last_name: '',
-        date_of_birth: '1990-01-01', // Default date since field is required
+        first_name:
+          user.user_metadata?.full_name ||
+          user.email?.split("@")[0] ||
+          "Usuario",
+        last_name: "",
+        date_of_birth: "1990-01-01", // Default date since field is required
         gender: null,
         phone_number: null,
         emergency_contact_name: null,
         emergency_contact_phone: null,
         medical_conditions: null,
         allergies: null,
-        preferred_language: 'es',
-        timezone: 'Europe/Madrid',
-        profile_completed: false
+        preferred_language: "es",
+        timezone: "Europe/Madrid",
+        profile_completed: false,
       };
-      
-      console.log('Creating patient profile with data:', patientData);
+
+      console.log("Creating patient profile with data:", patientData);
       const { data: newPatient, error: insertError } = await supabase
-        .from('patients')
+        .from("patients")
         .insert(patientData as any)
         .select()
         .single();
-      
+
       if (insertError) {
-        console.error('Error creating patient profile:', insertError);
+        console.error("Error creating patient profile:", insertError);
         return { data: null, error: insertError };
       }
-      
-      console.log('Patient profile created successfully:', newPatient);
-      
+
+      console.log("Patient profile created successfully:", newPatient);
+
       // Create initial user stats
       try {
         const statsData = {
@@ -178,45 +205,45 @@ export const db = {
           total_intakes: 0,
           successful_intakes: 0,
           missed_intakes: 0,
-          adherence_rate: 0.00,
+          adherence_rate: 0.0,
           current_streak: 0,
           longest_streak: 0,
           total_points: 0,
-          last_activity_at: new Date().toISOString()
+          last_activity_at: new Date().toISOString(),
         };
-        
-        await supabase.from('user_stats').insert(statsData as any);
-        console.log('User stats created successfully');
+
+        await supabase.from("user_stats").insert(statsData as any);
+        console.log("User stats created successfully");
       } catch (statsError) {
-        console.error('Error creating user stats:', statsError);
+        console.error("Error creating user stats:", statsError);
         // Continue even if stats creation fails
       }
-      
+
       // Award welcome badge
       try {
         const { data: welcomeBadge } = await supabase
-          .from('badges')
-          .select('id')
-          .eq('name', 'welcome')
+          .from("badges")
+          .select("id")
+          .eq("name", "welcome")
           .single();
-          
+
         if (welcomeBadge && (welcomeBadge as any).id) {
-          await supabase.from('user_badges').insert({
+          await supabase.from("user_badges").insert({
             user_id: userId,
             badge_id: (welcomeBadge as any).id,
             earned_at: new Date().toISOString(),
-            points_at_earning: 0
+            points_at_earning: 0,
           } as any);
-          console.log('Welcome badge awarded successfully');
+          console.log("Welcome badge awarded successfully");
         }
       } catch (badgeError) {
-        console.error('Error awarding welcome badge:', badgeError);
+        console.error("Error awarding welcome badge:", badgeError);
         // Continue even if badge creation fails
       }
-      
+
       return { data: newPatient, error: null };
     }
-    
+
     return result;
   },
 
@@ -236,13 +263,16 @@ export const db = {
       .select("id")
       .eq("user_id", userId)
       .single();
-    
+
     if (patientError || !patient) {
       return { data: [], error: patientError };
     }
 
     const patientId = (patient as any).id;
-    let query = supabase.from("medications").select("*").eq("patient_id", patientId);
+    let query = supabase
+      .from("medications")
+      .select("*")
+      .eq("patient_id", patientId);
     if (activeOnly) {
       query = query.eq("is_active", true);
     }
@@ -260,40 +290,49 @@ export const db = {
       .select("id")
       .eq("user_id", userId)
       .single();
-    
+
     if (patientError || !patient) {
-      throw new Error('Patient profile not found');
+      throw new Error("Patient profile not found");
     }
 
     const patientId = (patient as any).id;
-    const inserted = await supabase.from("medications").insert({
-      ...data,
-      patient_id: patientId
-    }).select().single();
+    const inserted = await supabase
+      .from("medications")
+      .insert({
+        ...data,
+        patient_id: patientId,
+      })
+      .select()
+      .single();
 
     const med = (inserted as any).data;
     if (med) {
       const start = med.start_date ? new Date(med.start_date) : new Date();
-      const end = med.end_date ? new Date(med.end_date) : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const end = med.end_date
+        ? new Date(med.end_date)
+        : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
       const items: any[] = [];
       const dayMs = 24 * 60 * 60 * 1000;
       const hourMs = 60 * 60 * 1000;
       const getIntervalHours = (freq: string) => {
-        if (freq === 'every_4_hours') return 4;
-        if (freq === 'every_6_hours') return 6;
-        if (freq === 'every_8_hours') return 8;
-        if (freq === 'every_12_hours') return 12;
+        if (freq === "every_4_hours") return 4;
+        if (freq === "every_6_hours") return 6;
+        if (freq === "every_8_hours") return 8;
+        if (freq === "every_12_hours") return 12;
         return 0;
       };
 
       const intervalHours = getIntervalHours(med.frequency as string);
       if (intervalHours > 0) {
         const base = new Date(start);
-        const timeStr = Array.isArray(med.specific_times) && med.specific_times.length > 0 ? med.specific_times[0] : '09:00:00';
-        const parts = (timeStr || '').split(':');
-        const h = parseInt(parts[0] || '0', 10);
-        const m2 = parseInt(parts[1] || '0', 10);
-        const s2 = parseInt(parts[2] || '0', 10);
+        const timeStr =
+          Array.isArray(med.specific_times) && med.specific_times.length > 0
+            ? med.specific_times[0]
+            : "09:00:00";
+        const parts = (timeStr || "").split(":");
+        const h = parseInt(parts[0] || "0", 10);
+        const m2 = parseInt(parts[1] || "0", 10);
+        const s2 = parseInt(parts[2] || "0", 10);
         base.setHours(h, m2, s2, 0);
 
         const interval = intervalHours * hourMs;
@@ -305,14 +344,17 @@ export const db = {
             is_taken: false,
           });
         }
-      } else if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+      } else if (
+        Array.isArray(med.specific_times) &&
+        med.specific_times.length > 0
+      ) {
         for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
           const day = new Date(t);
           med.specific_times.forEach((time: string) => {
-            const parts = (time || '').split(':');
-            const h = parseInt(parts[0] || '0', 10);
-            const m2 = parseInt(parts[1] || '0', 10);
-            const s2 = parseInt(parts[2] || '0', 10);
+            const parts = (time || "").split(":");
+            const h = parseInt(parts[0] || "0", 10);
+            const m2 = parseInt(parts[1] || "0", 10);
+            const s2 = parseInt(parts[2] || "0", 10);
             const when = new Date(day);
             when.setHours(h, m2, s2, 0);
             items.push({
@@ -326,7 +368,13 @@ export const db = {
       }
 
       if (items.length > 0) {
-        await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time', ignoreDuplicates: true } as any);
+        await (supabase.from("dosage_schedules") as any).upsert(
+          items as any,
+          {
+            onConflict: "medication_id,scheduled_time",
+            ignoreDuplicates: true,
+          } as any
+        );
       }
     }
 
@@ -355,49 +403,75 @@ export const db = {
       .select("id")
       .eq("user_id", userId)
       .single();
-    
-    console.log('getIntakeLogs - patient lookup:', { userId, patient, patientError });
-    
+
+    console.log("getIntakeLogs - patient lookup:", {
+      userId,
+      patient,
+      patientError,
+    });
+
     if (patientError || !patient) {
       return { data: [], error: patientError };
     }
 
     const patientId = (patient as any).id;
-    console.log('getIntakeLogs - patientId:', patientId);
-    
+    console.log("getIntakeLogs - patientId:", patientId);
+
     const result = await supabase
       .from("intake_logs")
-      .select(`
+      .select(
+        `
         *,
         medications!inner(*)
-      `)
+      `
+      )
       .eq("medications.patient_id", patientId)
       .order("taken_at", { ascending: false });
-    
-    console.log('getIntakeLogs - query result:', result);
+
+    console.log("getIntakeLogs - query result:", result);
+    return result;
+  },
+
+  getIntakeLogForMedicationAtTime: async (
+    medicationId: string,
+    scheduledIso: string
+  ) => {
+    const result = await supabase
+      .from("intake_logs")
+      .select("id")
+      .eq("medication_id", medicationId)
+      .eq("scheduled_time", scheduledIso)
+      .eq("status", "taken")
+      .limit(1);
     return result;
   },
 
   createIntakeLog: async (medicationId: string, data: any) => {
-    return supabase.from("intake_logs").insert({
-      medication_id: medicationId,
-      ...data
-    }).select().single();
+    return supabase
+      .from("intake_logs")
+      .insert({
+        medication_id: medicationId,
+        ...data,
+      })
+      .select()
+      .single();
   },
 
   // Dosage Schedules - Get through medication -> patient relationship
   getTodaySchedule: async (userId: string) => {
     const now = new Date();
-    const start = new Date(now); start.setHours(0,0,0,0);
-    const end = new Date(now); end.setHours(23,59,59,999);
-    
+    const start = new Date(now);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now);
+    end.setHours(23, 59, 59, 999);
+
     // Get patient ID first
     const { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
       .single();
-    
+
     if (patientError || !patient) {
       return { data: [], error: patientError };
     }
@@ -405,10 +479,12 @@ export const db = {
     const patientId = (patient as any).id;
     return supabase
       .from("dosage_schedules")
-      .select(`
+      .select(
+        `
         *,
         medications!inner(*)
-      `)
+      `
+      )
       .eq("medications.patient_id", patientId)
       .eq("medications.is_active", true)
       .gte("scheduled_time", start.toISOString())
@@ -417,14 +493,18 @@ export const db = {
   },
 
   // Get schedules for a date range (for calendar view)
-  getSchedulesForDateRange: async (userId: string, startDate: Date, endDate: Date) => {
+  getSchedulesForDateRange: async (
+    userId: string,
+    startDate: Date,
+    endDate: Date
+  ) => {
     // Get patient ID first
     const { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
       .single();
-    
+
     if (patientError || !patient) {
       return { data: [], error: patientError };
     }
@@ -432,10 +512,12 @@ export const db = {
     const patientId = (patient as any).id;
     return supabase
       .from("dosage_schedules")
-      .select(`
+      .select(
+        `
         *,
         medications!inner(*)
-      `)
+      `
+      )
       .eq("medications.patient_id", patientId)
       .eq("medications.is_active", true)
       .gte("scheduled_time", startDate.toISOString())
@@ -444,98 +526,84 @@ export const db = {
   },
 
   // Ensure schedules exist for a date range (idempotent via upsert)
-  ensureSchedulesForDateRange: async (userId: string, startDate: Date, endDate: Date) => {
+  ensureSchedulesForDateRange: async (
+    userId: string,
+    startDate: Date,
+    endDate: Date
+  ) => {
     const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
       .single();
     if (patientError || !patient) return { data: null, error: patientError };
     const patientId = (patient as any).id;
 
     const { data: medications } = await supabase
-      .from('medications')
-      .select('*')
-      .eq('patient_id', patientId)
-      .eq('is_active', true);
+      .from("medications")
+      .select("*")
+      .eq("patient_id", patientId)
+      .eq("is_active", true);
 
     const items: any[] = [];
     const dayMs = 24 * 60 * 60 * 1000;
-    const hourMs = 60 * 60 * 1000;
-    const getIntervalHours = (freq: string) => {
-      if (freq === 'every_4_hours') return 4;
-      if (freq === 'every_6_hours') return 6;
-      if (freq === 'every_8_hours') return 8;
-      if (freq === 'every_12_hours') return 12;
-      return 0;
-    };
+    for (let t = startDate.getTime(); t <= endDate.getTime(); t += dayMs) {
+      const day = new Date(t);
+      ((medications as any[]) || []).forEach((med) => {
+        if (
+          Array.isArray(med.specific_times) &&
+          med.specific_times.length > 0
+        ) {
+          // Respect medication start/end window
+          const medStart = med.start_date
+            ? new Date(med.start_date)
+            : startDate;
+          // For continuous treatments (no end_date), extend to the requested endDate or 30 days from start
+          const defaultEndDate = med.start_date
+            ? new Date(
+                new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000
+              )
+            : endDate;
+          const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
+          if (day < medStart || day > medEnd) return;
 
-    (medications as any[] || []).forEach((med) => {
-      const medStart = med.start_date ? new Date(med.start_date) : startDate;
-      const defaultEndDate = med.start_date ? new Date(new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000) : endDate;
-      const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
-      const rangeStart = new Date(Math.max(startDate.getTime(), medStart.getTime()));
-      const rangeEnd = new Date(Math.min(endDate.getTime(), medEnd.getTime()));
-
-      const intervalHours = getIntervalHours(med.frequency as string);
-      if (intervalHours > 0) {
-        const base = new Date(medStart);
-        const timeStr = Array.isArray(med.specific_times) && med.specific_times.length > 0 ? med.specific_times[0] : '09:00:00';
-        const parts = (timeStr || '').split(':');
-        const h = parseInt(parts[0] || '0', 10);
-        const m2 = parseInt(parts[1] || '0', 10);
-        const s2 = parseInt(parts[2] || '0', 10);
-        base.setHours(h, m2, s2, 0);
-
-        const interval = intervalHours * hourMs;
-        let first = new Date(base);
-        if (first < rangeStart) {
-          const diff = rangeStart.getTime() - first.getTime();
-          const steps = Math.ceil(diff / interval);
-          first = new Date(first.getTime() + steps * interval);
-        }
-        for (let t = first.getTime(); t <= rangeEnd.getTime(); t += interval) {
-          items.push({
-            medication_id: med.id,
-            scheduled_time: new Date(t).toISOString(),
-            dose_amount: med.dosage,
-            is_taken: false,
+          med.specific_times.forEach((time: string) => {
+            const parts = (time || "").split(":");
+            const h = parseInt(parts[0] || "0", 10);
+            const m2 = parseInt(parts[1] || "0", 10);
+            const s2 = parseInt(parts[2] || "0", 10);
+            const when = new Date(day);
+            when.setHours(h, m2, s2, 0);
+            items.push({
+              medication_id: med.id,
+              scheduled_time: when.toISOString(),
+              dose_amount: med.dosage,
+              is_taken: false,
+            });
           });
         }
-      } else {
-        for (let t = rangeStart.getTime(); t <= rangeEnd.getTime(); t += dayMs) {
-          const day = new Date(t);
-          if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
-            med.specific_times.forEach((time: string) => {
-              const parts = (time || '').split(':');
-              const h = parseInt(parts[0] || '0', 10);
-              const m2 = parseInt(parts[1] || '0', 10);
-              const s2 = parseInt(parts[2] || '0', 10);
-              const when = new Date(day);
-              when.setHours(h, m2, s2, 0);
-              items.push({
-                medication_id: med.id,
-                scheduled_time: when.toISOString(),
-                dose_amount: med.dosage,
-                is_taken: false,
-              });
-            });
-          }
-        }
-      }
-    });
+      });
+    }
 
     if (items.length > 0) {
-      await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time', ignoreDuplicates: true } as any);
+      await (supabase.from("dosage_schedules") as any).upsert(
+        items as any,
+        {
+          onConflict: "medication_id,scheduled_time",
+          ignoreDuplicates: true,
+        } as any
+      );
     }
     return { data: true, error: null };
   },
 
   updateScheduleStatus: async (id: string, status: string, notes?: string) => {
-    return ((supabase.from("dosage_schedules") as any).update({
+    return (
+      (supabase.from("dosage_schedules") as any).update({
         is_taken: status === "taken",
         notes,
-      } as any) as any)
+      } as any) as any
+    )
       .eq("id", id)
       .select()
       .single();
@@ -599,7 +667,7 @@ export const db = {
       .select("id")
       .eq("user_id", userId)
       .single();
-    
+
     if (patientError || !patient) {
       return { data: [], error: patientError };
     }
@@ -614,8 +682,11 @@ export const db = {
   },
 
   markNotificationAsRead: async (id: string) => {
-    return ((supabase.from("notifications") as any).update({ is_read: true } as any) as any)
-      .eq("id", id);
+    return (
+      (supabase.from("notifications") as any).update({
+        is_read: true,
+      } as any) as any
+    ).eq("id", id);
   },
 };
 
@@ -626,7 +697,9 @@ export const subscribeToMedicationUpdates = (
 ) => {
   // This would need to be implemented with a more complex query
   // since dosage_schedules doesn't have direct user_id
-  console.warn('subscribeToMedicationUpdates needs implementation for patient relationship');
+  console.warn(
+    "subscribeToMedicationUpdates needs implementation for patient relationship"
+  );
   return null;
 };
 
@@ -636,7 +709,9 @@ export const subscribeToNotifications = (
 ) => {
   // This would need to be implemented with a more complex query
   // since notifications uses patient_id, not user_id
-  console.warn('subscribeToNotifications needs implementation for patient relationship');
+  console.warn(
+    "subscribeToNotifications needs implementation for patient relationship"
+  );
   return null;
 };
 

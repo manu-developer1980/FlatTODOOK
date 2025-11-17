@@ -43,6 +43,7 @@ export default function Calendar() {
   const [loading, setLoading] = useState(true);
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [weekSchedule, setWeekSchedule] = useState<DaySchedule[]>([]);
+  const [processing, setProcessing] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     loadData();
@@ -183,9 +184,10 @@ export default function Calendar() {
     medicationId: string
   ) => {
     if (!user) return;
+    if (processing[scheduleId]) return;
 
     try {
-      // Find the medication in our medications array
+      setProcessing((prev) => ({ ...prev, [scheduleId]: true }));
       const medication = medications.find((med) => med.id === medicationId);
       if (!medication) {
         console.error("Medication not found in array:", medicationId);
@@ -193,14 +195,31 @@ export default function Calendar() {
         return;
       }
 
-      // Find the current schedule to get the scheduled date
       const currentSchedule = dosageSchedules.find(
         (schedule) => schedule.id === scheduleId
       );
       const scheduledDate =
         currentSchedule?.scheduled_time || new Date().toISOString();
 
-      // Update the schedule status
+      const scheduled = new Date(scheduledDate);
+      if (scheduled.getTime() > Date.now()) {
+        toast.error("No puedes marcar tomas futuras");
+        return;
+      }
+
+      const { data: existingLogs, error: existingError } = await (db as any).getIntakeLogForMedicationAtTime(
+        medicationId,
+        scheduledDate
+      );
+      if (!existingError && Array.isArray(existingLogs) && existingLogs.length > 0) {
+        if (!currentSchedule?.is_taken) {
+          await db.updateScheduleStatus(scheduleId, "taken");
+        }
+        toast.info("Este horario ya estaba registrado como tomado");
+        await loadData();
+        return;
+      }
+
       const { error: updateError } = await db.updateScheduleStatus(
         scheduleId,
         "taken"
@@ -211,7 +230,7 @@ export default function Calendar() {
         return;
       }
 
-      // Create intake log for statistics
+      // Crear el intake log para estadísticas
       console.log("Creating intake log for medication:", medicationId);
       console.log("Scheduled date:", scheduledDate);
 
@@ -229,7 +248,6 @@ export default function Calendar() {
 
       if (logError) {
         console.error("Error creating intake log:", logError);
-        // Don't fail the operation if log creation fails, but show warning
         toast.warning(
           "Medicamento marcado como tomado, pero hubo un error al registrar la estadística"
         );
@@ -238,10 +256,15 @@ export default function Calendar() {
         toast.success("Medicamento marcado como tomado");
       }
 
-      loadData();
+      await loadData();
     } catch (error) {
       console.error("Error marking as taken:", error);
       toast.error("Error al marcar como tomado");
+    } finally {
+      setProcessing((prev) => {
+        const { [scheduleId]: _, ...rest } = prev;
+        return rest;
+      });
     }
   };
 
@@ -441,9 +464,11 @@ export default function Calendar() {
                                       med.medication.id
                                     )
                                   }
-                                  className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]"
+                                  disabled={new Date(med.schedule.scheduled_time).getTime() > Date.now() || !!processing[med.schedule.id]}
+                                  title={new Date(med.schedule.scheduled_time).getTime() > Date.now() ? "No puedes marcar tomas futuras" : undefined}
+                                  className={`${new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]`}
                                 >
-                                  Tomar
+                                  {new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'Pendiente' : 'Tomar'}
                                 </button>
                               )}
                             </div>
@@ -566,9 +591,11 @@ export default function Calendar() {
                                   med.medication.id
                                 )
                               }
-                              className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]"
+                              disabled={new Date(med.schedule.scheduled_time).getTime() > Date.now() || !!processing[med.schedule.id]}
+                              title={new Date(med.schedule.scheduled_time).getTime() > Date.now() ? "No puedes marcar tomas futuras" : undefined}
+                              className={`${new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]`}
                             >
-                              Marcar como tomado
+                              {new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'Pendiente' : 'Marcar como tomado'}
                             </button>
                           )}
                         </div>

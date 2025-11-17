@@ -217,6 +217,33 @@ export default function MedicationForm() {
       case "four_times_daily":
         times = ["08:00", "12:00", "16:00", "20:00"];
         break;
+      case "every_4_hours": {
+        const list: string[] = [];
+        for (let h = 8; h < 24; h += 4) list.push(`${h.toString().padStart(2, "0")}:00`);
+        times = list;
+        break;
+      }
+      case "every_6_hours": {
+        const list: string[] = [];
+        for (let h = 8; h < 24; h += 6) list.push(`${h.toString().padStart(2, "0")}:00`);
+        times = list;
+        break;
+      }
+      case "every_8_hours": {
+        const list: string[] = [];
+        for (let h = 8; h < 24; h += 8) list.push(`${h.toString().padStart(2, "0")}:00`);
+        times = list;
+        break;
+      }
+      case "every_12_hours":
+        times = ["08:00", "20:00"];
+        break;
+      case "weekly":
+        times = ["09:00"];
+        break;
+      case "monthly":
+        times = ["09:00"];
+        break;
       default:
         times = formData.specific_times;
     }
