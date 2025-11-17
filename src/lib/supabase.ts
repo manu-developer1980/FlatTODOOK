@@ -272,32 +272,61 @@ export const db = {
     }).select().single();
 
     const med = (inserted as any).data;
-    if (med && Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+    if (med) {
       const start = med.start_date ? new Date(med.start_date) : new Date();
       const end = med.end_date ? new Date(med.end_date) : new Date(start.getTime() + 30 * 24 * 60 * 60 * 1000);
-
       const items: any[] = [];
       const dayMs = 24 * 60 * 60 * 1000;
-      for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
-        const day = new Date(t);
-        med.specific_times.forEach((time: string) => {
-          const parts = (time || '').split(':');
-          const h = parseInt(parts[0] || '0', 10);
-          const m2 = parseInt(parts[1] || '0', 10);
-          const s2 = parseInt(parts[2] || '0', 10);
-          const when = new Date(day);
-          when.setHours(h, m2, s2, 0);
+      const hourMs = 60 * 60 * 1000;
+      const getIntervalHours = (freq: string) => {
+        if (freq === 'every_4_hours') return 4;
+        if (freq === 'every_6_hours') return 6;
+        if (freq === 'every_8_hours') return 8;
+        if (freq === 'every_12_hours') return 12;
+        return 0;
+      };
+
+      const intervalHours = getIntervalHours(med.frequency as string);
+      if (intervalHours > 0) {
+        const base = new Date(start);
+        const timeStr = Array.isArray(med.specific_times) && med.specific_times.length > 0 ? med.specific_times[0] : '09:00:00';
+        const parts = (timeStr || '').split(':');
+        const h = parseInt(parts[0] || '0', 10);
+        const m2 = parseInt(parts[1] || '0', 10);
+        const s2 = parseInt(parts[2] || '0', 10);
+        base.setHours(h, m2, s2, 0);
+
+        const interval = intervalHours * hourMs;
+        for (let t = base.getTime(); t <= end.getTime(); t += interval) {
           items.push({
             medication_id: med.id,
-            scheduled_time: when.toISOString(),
+            scheduled_time: new Date(t).toISOString(),
             dose_amount: med.dosage,
             is_taken: false,
           });
-        });
+        }
+      } else if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+        for (let t = start.getTime(); t <= end.getTime(); t += dayMs) {
+          const day = new Date(t);
+          med.specific_times.forEach((time: string) => {
+            const parts = (time || '').split(':');
+            const h = parseInt(parts[0] || '0', 10);
+            const m2 = parseInt(parts[1] || '0', 10);
+            const s2 = parseInt(parts[2] || '0', 10);
+            const when = new Date(day);
+            when.setHours(h, m2, s2, 0);
+            items.push({
+              medication_id: med.id,
+              scheduled_time: when.toISOString(),
+              dose_amount: med.dosage,
+              is_taken: false,
+            });
+          });
+        }
       }
 
       if (items.length > 0) {
-        await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time' } as any);
+        await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time', ignoreDuplicates: true } as any);
       }
     }
 
@@ -381,6 +410,7 @@ export const db = {
         medications!inner(*)
       `)
       .eq("medications.patient_id", patientId)
+      .eq("medications.is_active", true)
       .gte("scheduled_time", start.toISOString())
       .lt("scheduled_time", end.toISOString())
       .order("scheduled_time");
@@ -407,6 +437,7 @@ export const db = {
         medications!inner(*)
       `)
       .eq("medications.patient_id", patientId)
+      .eq("medications.is_active", true)
       .gte("scheduled_time", startDate.toISOString())
       .lte("scheduled_time", endDate.toISOString())
       .order("scheduled_time");
@@ -430,37 +461,72 @@ export const db = {
 
     const items: any[] = [];
     const dayMs = 24 * 60 * 60 * 1000;
-    for (let t = startDate.getTime(); t <= endDate.getTime(); t += dayMs) {
-      const day = new Date(t);
-      (medications as any[] || []).forEach((med) => {
-        if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
-          // Respect medication start/end window
-          const medStart = med.start_date ? new Date(med.start_date) : startDate;
-          // For continuous treatments (no end_date), extend to the requested endDate or 30 days from start
-          const defaultEndDate = med.start_date ? new Date(new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000) : endDate;
-          const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
-          if (day < medStart || day > medEnd) return;
+    const hourMs = 60 * 60 * 1000;
+    const getIntervalHours = (freq: string) => {
+      if (freq === 'every_4_hours') return 4;
+      if (freq === 'every_6_hours') return 6;
+      if (freq === 'every_8_hours') return 8;
+      if (freq === 'every_12_hours') return 12;
+      return 0;
+    };
 
-          med.specific_times.forEach((time: string) => {
-            const parts = (time || '').split(':');
-            const h = parseInt(parts[0] || '0', 10);
-            const m2 = parseInt(parts[1] || '0', 10);
-            const s2 = parseInt(parts[2] || '0', 10);
-            const when = new Date(day);
-            when.setHours(h, m2, s2, 0);
-            items.push({
-              medication_id: med.id,
-              scheduled_time: when.toISOString(),
-              dose_amount: med.dosage,
-              is_taken: false,
-            });
+    (medications as any[] || []).forEach((med) => {
+      const medStart = med.start_date ? new Date(med.start_date) : startDate;
+      const defaultEndDate = med.start_date ? new Date(new Date(med.start_date).getTime() + 30 * 24 * 60 * 60 * 1000) : endDate;
+      const medEnd = med.end_date ? new Date(med.end_date) : defaultEndDate;
+      const rangeStart = new Date(Math.max(startDate.getTime(), medStart.getTime()));
+      const rangeEnd = new Date(Math.min(endDate.getTime(), medEnd.getTime()));
+
+      const intervalHours = getIntervalHours(med.frequency as string);
+      if (intervalHours > 0) {
+        const base = new Date(medStart);
+        const timeStr = Array.isArray(med.specific_times) && med.specific_times.length > 0 ? med.specific_times[0] : '09:00:00';
+        const parts = (timeStr || '').split(':');
+        const h = parseInt(parts[0] || '0', 10);
+        const m2 = parseInt(parts[1] || '0', 10);
+        const s2 = parseInt(parts[2] || '0', 10);
+        base.setHours(h, m2, s2, 0);
+
+        const interval = intervalHours * hourMs;
+        let first = new Date(base);
+        if (first < rangeStart) {
+          const diff = rangeStart.getTime() - first.getTime();
+          const steps = Math.ceil(diff / interval);
+          first = new Date(first.getTime() + steps * interval);
+        }
+        for (let t = first.getTime(); t <= rangeEnd.getTime(); t += interval) {
+          items.push({
+            medication_id: med.id,
+            scheduled_time: new Date(t).toISOString(),
+            dose_amount: med.dosage,
+            is_taken: false,
           });
         }
-      });
-    }
+      } else {
+        for (let t = rangeStart.getTime(); t <= rangeEnd.getTime(); t += dayMs) {
+          const day = new Date(t);
+          if (Array.isArray(med.specific_times) && med.specific_times.length > 0) {
+            med.specific_times.forEach((time: string) => {
+              const parts = (time || '').split(':');
+              const h = parseInt(parts[0] || '0', 10);
+              const m2 = parseInt(parts[1] || '0', 10);
+              const s2 = parseInt(parts[2] || '0', 10);
+              const when = new Date(day);
+              when.setHours(h, m2, s2, 0);
+              items.push({
+                medication_id: med.id,
+                scheduled_time: when.toISOString(),
+                dose_amount: med.dosage,
+                is_taken: false,
+              });
+            });
+          }
+        }
+      }
+    });
 
     if (items.length > 0) {
-      await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time' } as any);
+      await (supabase.from('dosage_schedules') as any).upsert(items as any, { onConflict: 'medication_id,scheduled_time', ignoreDuplicates: true } as any);
     }
     return { data: true, error: null };
   },
