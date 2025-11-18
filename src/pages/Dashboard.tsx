@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Pill, Clock, CheckCircle, AlertCircle, TrendingUp, Users } from 'lucide-react';
 import { useAuthStore } from '../stores/auth';
 import { db } from '../lib/supabase';
@@ -7,6 +8,7 @@ import { toast } from 'sonner';
 
 export default function Dashboard() {
   const { user } = useAuthStore();
+  const navigate = useNavigate();
   const [todaySchedule, setTodaySchedule] = useState<any[]>([]);
   const [statistics, setStatistics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -288,7 +290,7 @@ export default function Dashboard() {
           <p className="text-gray-600 mb-4">
             Registra una nueva medicación en tu tratamiento
           </p>
-          <button className="btn-primary w-full">
+          <button className="btn-primary w-full" onClick={() => navigate('/medications/add')}>
             Nueva Medicación
           </button>
         </div>
@@ -301,7 +303,7 @@ export default function Dashboard() {
           <p className="text-gray-600 mb-4">
             Añade a un familiar o amigo para que te ayude
           </p>
-          <button className="btn-secondary w-full">
+          <button className="btn-secondary w-full" onClick={() => navigate('/settings?tab=caregivers', { state: { activeTab: 'caregivers' } })}>
             Invitar Cuidador
           </button>
         </div>

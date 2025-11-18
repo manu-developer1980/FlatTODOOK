@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import SubscriptionManager from '@/components/SubscriptionManager'
 import { 
@@ -19,6 +20,17 @@ export default function Settings() {
   const { user, signOut } = useAuthStore()
   const [isSaving, setIsSaving] = useState(false)
   const [activeTab, setActiveTab] = useState('profile')
+  const location = useLocation()
+  const [searchParams] = useSearchParams()
+
+  useEffect(() => {
+    const tabParam = searchParams.get('tab')
+    const stateTab = (location.state as any)?.activeTab
+    const target = tabParam || stateTab
+    if (target && ['profile','notifications','privacy','subscription','caregivers','appearance','language'].includes(target)) {
+      setActiveTab(target)
+    }
+  }, [location, searchParams])
 
   const handleSave = async () => {
     setIsSaving(true)
