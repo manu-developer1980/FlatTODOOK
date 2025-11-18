@@ -213,7 +213,10 @@ export default function Calendar() {
       );
       if (!existingError && Array.isArray(existingLogs) && existingLogs.length > 0) {
         if (!currentSchedule?.is_taken) {
-          await db.updateScheduleStatus(scheduleId, "taken");
+          const { error: updErr } = await db.updateScheduleStatus(scheduleId, "taken");
+          if (!updErr) {
+            setDosageSchedules((prev) => prev.map((s) => s.id === scheduleId ? { ...s, is_taken: true } : s));
+          }
         }
         toast.info("Este horario ya estaba registrado como tomado");
         await loadData();
@@ -229,6 +232,7 @@ export default function Calendar() {
         toast.error("Error al actualizar el estado");
         return;
       }
+      setDosageSchedules((prev) => prev.map((s) => s.id === scheduleId ? { ...s, is_taken: true } : s));
 
       // Crear el intake log para estadísticas
       console.log("Creating intake log for medication:", medicationId);
