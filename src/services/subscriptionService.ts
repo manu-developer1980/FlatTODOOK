@@ -93,16 +93,19 @@ export class SubscriptionService {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return null
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/subscriptions/create-checkout-session`, {
+      const edgeBase = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+      const response = await fetch(`${edgeBase}/create-checkout-session`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string
         }
       })
 
       if (!response.ok) {
-        throw new Error('Error creando sesión de checkout')
+        const text = await response.text()
+        throw new Error(`Error creando sesión de checkout: ${text}`)
       }
 
       const data = await response.json()
@@ -121,11 +124,13 @@ export class SubscriptionService {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return null
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL || 'http://localhost:3001'}/api/subscriptions/cancel-subscription`, {
+      const edgeBase = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1`
+      const response = await fetch(`${edgeBase}/cancel-subscription`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`
+          'Authorization': `Bearer ${session.access_token}`,
+          'apikey': import.meta.env.VITE_SUPABASE_ANON_KEY as string
         }
       })
 

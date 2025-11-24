@@ -247,6 +247,44 @@ export const db = {
     return result;
   },
 
+  getUserSettings: async (userId: string) => {
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    if (patientError || !patient) return { data: null, error: patientError };
+    const patientId = (patient as any).id;
+    const result = await supabase
+      .from('user_settings')
+      .select('*')
+      .eq('patient_id', patientId)
+      .single();
+    if ((result as any).error && (result as any).error.code === 'PGRST116') {
+      const insert = await supabase
+        .from('user_settings')
+        .insert({ patient_id: patientId } as any)
+        .select()
+        .single();
+      return insert;
+    }
+    return result;
+  },
+
+  upsertUserSettings: async (userId: string, payload: any) => {
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    if (patientError || !patient) return { data: null, error: patientError };
+    const patientId = (patient as any).id;
+    return (supabase.from('user_settings') as any)
+      .upsert({ patient_id: patientId, ...payload } as any, { onConflict: 'patient_id' } as any)
+      .select()
+      .single();
+  },
+
   updateUser: async (userId: string, data: any) => {
     return (supabase.from("patients") as any)
       .update(data)

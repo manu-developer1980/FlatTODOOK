@@ -26,14 +26,18 @@ export default function SubscriptionManager() {
 
     setIsProcessing(true)
     try {
-      const { sessionId } = await SubscriptionService.createCheckoutSession()
+      const { sessionId } = await SubscriptionService.createCheckoutSession() as any
       if (!sessionId) {
         toast.error('Error al crear sesión de pago')
         return
       }
 
-      // Redirect to Stripe Checkout
-      window.location.href = `/api/stripe/checkout?session_id=${sessionId}`
+      const stripe = await stripePromise
+      if (!stripe) {
+        toast.error('Stripe no está configurado')
+        return
+      }
+      await stripe.redirectToCheckout({ sessionId })
     } catch (error) {
       console.error('Error upgrading to premium:', error)
       toast.error('Error al procesar el pago')

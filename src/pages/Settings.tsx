@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useLocation, useSearchParams } from 'react-router-dom'
+import { db } from '@/lib/supabase'
 import { useAuthStore } from '@/stores/auth'
 import SubscriptionManager from '@/components/SubscriptionManager'
 import { 
@@ -22,6 +23,38 @@ export default function Settings() {
   const [activeTab, setActiveTab] = useState('profile')
   const location = useLocation()
   const [searchParams] = useSearchParams()
+  const [profile, setProfile] = useState({
+    full_name: '',
+    email: '',
+    date_of_birth: '',
+    phone_number: ''
+  })
+  const [settings, setSettings] = useState<any>({
+    notifications: {
+      medication_reminders: true,
+      caregiver_alerts: true,
+      achievements: true,
+      email_notifications: false,
+      start_time: '08:00',
+      end_time: '22:00'
+    },
+    privacy: {
+      profile_private: false,
+      two_factor: false,
+      share_with_doctors: false,
+      anonymous_research: false
+    },
+    appearance: {
+      font_size: 'normal',
+      high_contrast: false,
+      theme_mode: 'light'
+    },
+    language: {
+      app_language: 'es',
+      date_format: 'DD/MM/AAAA',
+      time_format: '24h'
+    }
+  })
 
   useEffect(() => {
     const tabParam = searchParams.get('tab')
@@ -31,6 +64,60 @@ export default function Settings() {
       setActiveTab(target)
     }
   }, [location, searchParams])
+
+  useEffect(() => {
+    const loadData = async () => {
+      if (!user) return
+      const u = await db.getUser(user.user_id)
+      const s = await (db as any).getUserSettings(user.user_id)
+      const up = (u as any).data
+      const us = (s as any).data
+      setProfile({
+        full_name: up?.first_name || '',
+        email: user.email || '',
+        date_of_birth: up?.date_of_birth || '',
+        phone_number: up?.phone_number || ''
+      })
+      if (us) setSettings({
+        notifications: us.notifications || settings.notifications,
+        privacy: us.privacy || settings.privacy,
+        appearance: us.appearance || settings.appearance,
+        language: us.language || settings.language
+      })
+    }
+    loadData()
+  }, [user])
+
+  const saveProfile = async () => {
+    if (!user) return
+    setIsSaving(true)
+    try {
+      await db.updateUser(user.user_id, {
+        first_name: profile.full_name,
+        phone_number: profile.phone_number,
+        date_of_birth: profile.date_of_birth,
+        preferred_language: settings.language.app_language
+      })
+      toast.success('Perfil actualizado')
+    } catch (e) {
+      toast.error('Error al guardar perfil')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const saveSettings = async () => {
+    if (!user) return
+    setIsSaving(true)
+    try {
+      await (db as any).upsertUserSettings(user.user_id, settings)
+      toast.success('Configuración guardada')
+    } catch (e) {
+      toast.error('Error al guardar configuración')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const handleSave = async () => {
     setIsSaving(true)
@@ -74,7 +161,8 @@ export default function Settings() {
                   </label>
                   <input
                     type="text"
-                    defaultValue={user?.user_metadata?.full_name || ''}
+                    value={profile.full_name}
+                    onChange={(e) => setProfile((p) => ({ ...p, full_name: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
                   />
                 </div>
@@ -84,7 +172,7 @@ export default function Settings() {
                   </label>
                   <input
                     type="email"
-                    defaultValue={user?.email || ''}
+                    value={profile.email}
                     disabled
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg bg-gray-50 text-lg"
                   />
@@ -95,6 +183,8 @@ export default function Settings() {
                   </label>
                   <input
                     type="date"
+                    value={profile.date_of_birth}
+                    onChange={(e) => setProfile((p) => ({ ...p, date_of_birth: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
                   />
                 </div>
@@ -104,6 +194,8 @@ export default function Settings() {
                   </label>
                   <input
                     type="tel"
+                    value={profile.phone_number}
+                    onChange={(e) => setProfile((p) => ({ ...p, phone_number: e.target.value }))}
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
                   />
                 </div>
@@ -149,28 +241,28 @@ export default function Settings() {
                     <h4 className="font-medium text-gray-900">Recordatorios de medicación</h4>
                     <p className="text-sm text-gray-600">Recibir notificaciones cuando sea hora de tomar medicamentos</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.notifications.medication_reminders} onChange={(e) => setSettings((s: any) => ({ ...s, notifications: { ...s.notifications, medication_reminders: e.target.checked } }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-gray-900">Alertas de cuidadores</h4>
                     <p className="text-sm text-gray-600">Notificar a cuidadores si no tomo medicación</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.notifications.caregiver_alerts} onChange={(e) => setSettings((s: any) => ({ ...s, notifications: { ...s.notifications, caregiver_alerts: e.target.checked } }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-gray-900">Logros y recompensas</h4>
                     <p className="text-sm text-gray-600">Notificaciones sobre insignias y rachas</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.notifications.achievements} onChange={(e) => setSettings((s: any) => ({ ...s, notifications: { ...s.notifications, achievements: e.target.checked } }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-gray-900">Notificaciones por correo</h4>
                     <p className="text-sm text-gray-600">Recibir recordatorios por correo electrónico</p>
                   </div>
-                  <input type="checkbox" className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.notifications.email_notifications} onChange={(e) => setSettings((s: any) => ({ ...s, notifications: { ...s.notifications, email_notifications: e.target.checked } }))} />
                 </div>
               </div>
             </div>
@@ -182,21 +274,13 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Hora de inicio
                   </label>
-                  <input
-                    type="time"
-                    defaultValue="08:00"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
-                  />
+                  <input type="time" value={settings.notifications.start_time} onChange={(e) => setSettings((s: any) => ({ ...s, notifications: { ...s.notifications, start_time: e.target.value } }))} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Hora de fin
                   </label>
-                  <input
-                    type="time"
-                    defaultValue="22:00"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg"
-                  />
+                  <input type="time" value={settings.notifications.end_time} onChange={(e) => setSettings((s: any) => ({ ...s, notifications: { ...s.notifications, end_time: e.target.value } }))} className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg" />
                 </div>
               </div>
             </div>
@@ -214,21 +298,21 @@ export default function Settings() {
                     <h4 className="font-medium text-gray-900">Perfil privado</h4>
                     <p className="text-sm text-gray-600">Solo cuidadores autorizados pueden ver mi información</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.privacy.profile_private} onChange={(e) => setSettings((s: any) => ({ ...s, privacy: { ...s.privacy, profile_private: e.target.checked } }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-gray-900">Autenticación de dos factores</h4>
                     <p className="text-sm text-gray-600">Añadir capa extra de seguridad a mi cuenta</p>
                   </div>
-                  <input type="checkbox" className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.privacy.two_factor} onChange={(e) => setSettings((s: any) => ({ ...s, privacy: { ...s.privacy, two_factor: e.target.checked } }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
                     <h4 className="font-medium text-gray-900">Historial de acceso</h4>
                     <p className="text-sm text-gray-600">Recibir alertas sobre nuevos accesos a mi cuenta</p>
                   </div>
-                  <input type="checkbox" defaultChecked className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.privacy.share_with_doctors} onChange={(e) => setSettings((s: any) => ({ ...s, privacy: { ...s.privacy, share_with_doctors: e.target.checked } }))} />
                 </div>
               </div>
             </div>
@@ -241,7 +325,7 @@ export default function Settings() {
                     <h4 className="font-medium text-gray-900">Compartir con médicos</h4>
                     <p className="text-sm text-gray-600">Permitir acceso a mi historial médico a profesionales</p>
                   </div>
-                  <input type="checkbox" className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.privacy.anonymous_research} onChange={(e) => setSettings((s: any) => ({ ...s, privacy: { ...s.privacy, anonymous_research: e.target.checked } }))} />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>
@@ -262,7 +346,20 @@ export default function Settings() {
           <div className="space-y-6">
             <div className="flex items-center justify-between">
               <h3 className="text-lg font-semibold text-gray-900">Mis Cuidadores</h3>
-              <button className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors">
+              <button className="bg-primary text-white px-4 py-2 rounded-lg hover:bg-primary-dark transition-colors" onClick={async () => {
+                const email = prompt('Email del cuidador') || ''
+                const relationship = prompt('Relación (p.ej., padre, amigo)') || ''
+                if (!email) return
+                try {
+                  const { data: patient } = await db.getUser(user!.user_id)
+                  const patientId = (patient as any)?.id
+                  if (!patientId) return
+                  await db.inviteCaregiver(patientId, email, relationship)
+                  toast.success('Invitación enviada')
+                } catch {
+                  toast.error('Error enviando invitación')
+                }
+              }}>
                 Invitar Cuidador
               </button>
             </div>
@@ -271,7 +368,20 @@ export default function Settings() {
               <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
               <h4 className="text-lg font-medium text-gray-900 mb-2">No hay cuidadores</h4>
               <p className="text-gray-600 mb-4">Invita a familiares o amigos para que te ayuden con el seguimiento de tus medicaciones.</p>
-              <button className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark transition-colors">
+              <button className="bg-primary text-white px-6 py-3 rounded-lg hover:bg-primary-dark transition-colors" onClick={async () => {
+                const email = prompt('Email del cuidador') || ''
+                const relationship = prompt('Relación (p.ej., padre, amigo)') || ''
+                if (!email) return
+                try {
+                  const { data: patient } = await db.getUser(user!.user_id)
+                  const patientId = (patient as any)?.id
+                  if (!patientId) return
+                  await db.inviteCaregiver(patientId, email, relationship)
+                  toast.success('Invitación enviada')
+                } catch {
+                  toast.error('Error enviando invitación')
+                }
+              }}>
                 Invitar Primer Cuidador
               </button>
             </div>
@@ -298,10 +408,10 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Tamaño de fuente
                   </label>
-                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg">
-                    <option>Normal</option>
-                    <option>Grande</option>
-                    <option>Muy Grande</option>
+                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg" value={settings.appearance.font_size} onChange={(e) => setSettings((s: any) => ({ ...s, appearance: { ...s.appearance, font_size: e.target.value } }))}>
+                    <option value="normal">Normal</option>
+                    <option value="large">Grande</option>
+                    <option value="xlarge">Muy Grande</option>
                   </select>
                 </div>
               </div>
@@ -315,7 +425,7 @@ export default function Settings() {
                     <h4 className="font-medium text-gray-900">Alto contraste</h4>
                     <p className="text-sm text-gray-600">Mejora la legibilidad con colores más contrastados</p>
                   </div>
-                  <input type="checkbox" className="h-5 w-5 text-primary rounded" />
+                  <input type="checkbox" className="h-5 w-5 text-primary rounded" checked={settings.appearance.high_contrast} onChange={(e) => setSettings((s: any) => ({ ...s, appearance: { ...s.appearance, high_contrast: e.target.checked } }))} />
                 </div>
               </div>
             </div>
@@ -353,7 +463,7 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Idioma de la aplicación
                   </label>
-                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg">
+                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg" value={settings.language.app_language} onChange={(e) => setSettings((s: any) => ({ ...s, language: { ...s.language, app_language: e.target.value } }))}>
                     <option value="es">Español</option>
                     <option value="en">English</option>
                     <option value="ca">Català</option>
@@ -371,19 +481,19 @@ export default function Settings() {
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Formato de fecha
                   </label>
-                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg">
-                    <option>DD/MM/AAAA</option>
-                    <option>MM/DD/AAAA</option>
-                    <option>AAAA-MM-DD</option>
+                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg" value={settings.language.date_format} onChange={(e) => setSettings((s: any) => ({ ...s, language: { ...s.language, date_format: e.target.value } }))}>
+                    <option value="DD/MM/AAAA">DD/MM/AAAA</option>
+                    <option value="MM/DD/AAAA">MM/DD/AAAA</option>
+                    <option value="AAAA-MM-DD">AAAA-MM-DD</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Formato de hora
                   </label>
-                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg">
-                    <option>24 horas</option>
-                    <option>12 horas (AM/PM)</option>
+                  <select className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent text-lg" value={settings.language.time_format} onChange={(e) => setSettings((s: any) => ({ ...s, language: { ...s.language, time_format: e.target.value } }))}>
+                    <option value="24h">24 horas</option>
+                    <option value="12h">12 horas (AM/PM)</option>
                   </select>
                 </div>
               </div>
@@ -456,11 +566,11 @@ export default function Settings() {
               </button>
 
               <div className="flex items-center gap-3">
-                <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
+                <button className="px-6 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors" onClick={() => window.location.reload()}>
                   Cancelar
                 </button>
                 <button
-                  onClick={handleSave}
+                  onClick={activeTab === 'profile' ? saveProfile : saveSettings}
                   disabled={isSaving}
                   className="flex items-center gap-2 px-6 py-3 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
                 >
