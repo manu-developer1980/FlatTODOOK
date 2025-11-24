@@ -5,6 +5,7 @@ import { useAuthStore } from "../../stores/auth";
 import { db } from "../../lib/supabase";
 import { Medication, MedicationFormData, Patient } from "../../types";
 import { toast } from "sonner";
+import { hasUserId } from "@/lib/userUtils";
 
 const dosageUnits = [
   { value: "mg", label: "mg (miligramos)" },
@@ -16,6 +17,14 @@ const dosageUnits = [
   { value: "comprimidos", label: "Comprimidos" },
   { value: "cápsulas", label: "Cápsulas" },
   { value: "inyecciones", label: "Inyecciones" },
+];
+
+const concentrationUnits = [
+  { value: "mg", label: "mg (miligramos)" },
+  { value: "g", label: "g (gramos)" },
+  { value: "ml", label: "ml (mililitros)" },
+  { value: "%", label: "% (porcentaje)" },
+  { value: "mcg", label: "mcg (microgramos)" },
 ];
 
 const medicationForms = [
@@ -84,7 +93,7 @@ export default function MedicationForm() {
     if (!user) return;
 
     try {
-      const response = await db.getUser(user.user_id);
+      const response = await db.getUser(user.id);
       if ((response as any).data) {
         setPatient((response as any).data);
       }
@@ -153,10 +162,7 @@ export default function MedicationForm() {
           throw new Error("Error al actualizar medicamento");
         }
       } else {
-        const response = await db.createMedication(
-          user!.user_id,
-          medicationData
-        );
+        const response = await db.createMedication(user!.id, medicationData);
         if (response.data) {
           toast.success("Medicamento creado correctamente");
         } else {
@@ -389,31 +395,55 @@ export default function MedicationForm() {
 
               {/* Strength */}
               <div>
-                <label
-                  htmlFor="strength"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                <label className="block text-lg font-medium text-gray-700 mb-3">
                   Concentración
                 </label>
-                <input
-                  type="text"
-                  id="strength"
-                  required
-                  value={formData.strength}
-                  onChange={(e) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      strength: e.target.value,
-                    }))
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                  placeholder="500mg, 10ml, etc."
-                  aria-describedby="strength-help"
-                />
+                <div className="flex gap-3">
+                  <input
+                    type="number"
+                    id="strength-amount"
+                    required
+                    value={
+                      formData.strength ? parseFloat(formData.strength) : ""
+                    }
+                    onChange={(e) => {
+                      const amount = e.target.value;
+                      const unit =
+                        formData.strength?.match(/[a-zA-Z%]+/)?.[0] || "mg";
+                      setFormData((prev) => ({
+                        ...prev,
+                        strength: amount ? `${amount}${unit}` : "",
+                      }));
+                    }}
+                    className="w-24 px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    placeholder="500"
+                    min="0"
+                    step="0.01"
+                  />
+                  <select
+                    id="strength-unit"
+                    value={formData.strength?.match(/[a-zA-Z%]+/)?.[0] || "mg"}
+                    onChange={(e) => {
+                      const amount =
+                        formData.strength?.match(/[\d.]+/)?.[0] || "";
+                      const unit = e.target.value;
+                      setFormData((prev) => ({
+                        ...prev,
+                        strength: amount ? `${amount}${unit}` : "",
+                      }));
+                    }}
+                    className="flex-1 px-1 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    {concentrationUnits.map((unit) => (
+                      <option key={unit.value} value={unit.value}>
+                        {unit.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
                 <p id="strength-help" className="mt-2 text-sm text-gray-500">
                   Ej: 500mg, 10ml, 5%
                 </p>
               </div>
-
 
               {/* Pharmacy Name */}
               <div className="md:col-span-1">

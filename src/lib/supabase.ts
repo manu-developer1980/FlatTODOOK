@@ -160,38 +160,54 @@ export const db = {
         };
       }
 
-      console.log("Creating patient profile directly");
+      console.log("Creating patient profile using function");
 
-      // Create patient profile directly
-      const patientData = {
-        user_id: userId,
-        first_name:
-          user.user_metadata?.full_name ||
-          user.email?.split("@")[0] ||
-          "Usuario",
-        last_name: "",
-        date_of_birth: "1990-01-01", // Default date since field is required
-        gender: null,
-        phone_number: null,
-        emergency_contact_name: null,
-        emergency_contact_phone: null,
-        medical_conditions: null,
-        allergies: null,
-        preferred_language: "es",
-        timezone: "Europe/Madrid",
-        profile_completed: false,
-      };
+      // Use the create_patient_profile function to bypass RLS
+      const { data: patientId, error: functionError } = await supabase.rpc(
+        "create_patient_profile",
+        {
+          p_user_id: userId,
+          p_first_name:
+            user.user_metadata?.full_name ||
+            user.email?.split("@")[0] ||
+            "Usuario",
+          p_last_name: "",
+          p_date_of_birth: "1990-01-01",
+          p_gender: null,
+          p_phone_number: null,
+          p_emergency_contact_name: null,
+          p_emergency_contact_phone: null,
+          p_medical_conditions: null,
+          p_allergies: null,
+          p_preferred_language: "es",
+          p_timezone: "Europe/Madrid",
+          p_profile_completed: false,
+        }
+      );
 
-      console.log("Creating patient profile with data:", patientData);
-      const { data: newPatient, error: insertError } = await supabase
+      if (functionError) {
+        console.error(
+          "Error creating patient profile via function:",
+          functionError
+        );
+        return { data: null, error: functionError };
+      }
+
+      console.log("Patient profile created successfully with ID:", patientId);
+
+      // Get the newly created patient profile
+      const { data: newPatient, error: selectError } = await supabase
         .from("patients")
-        .insert(patientData as any)
-        .select()
+        .select("*")
+        .eq("user_id", userId)
         .single();
 
-      if (insertError) {
-        console.error("Error creating patient profile:", insertError);
-        return { data: null, error: insertError };
+      if (selectError) {
+        console.error(
+          "Error fetching newly created patient profile:",
+          selectError
+        );
+        return { data: null, error: selectError };
       }
 
       console.log("Patient profile created successfully:", newPatient);
@@ -212,10 +228,17 @@ export const db = {
           last_activity_at: new Date().toISOString(),
         };
 
-        await supabase.from("user_stats").insert(statsData as any);
-        console.log("User stats created successfully");
+        const { error: statsError } = await supabase
+          .from("user_stats")
+          .insert(statsData as any);
+
+        if (statsError) {
+          console.error("Error creating user stats:", statsError);
+        } else {
+          console.log("User stats created successfully");
+        }
       } catch (statsError) {
-        console.error("Error creating user stats:", statsError);
+        console.error("Exception creating user stats:", statsError);
         // Continue even if stats creation fails
       }
 
@@ -249,20 +272,20 @@ export const db = {
 
   getUserSettings: async (userId: string) => {
     const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
       .single();
     if (patientError || !patient) return { data: null, error: patientError };
     const patientId = (patient as any).id;
     const result = await supabase
-      .from('user_settings')
-      .select('*')
-      .eq('patient_id', patientId)
+      .from("user_settings")
+      .select("*")
+      .eq("patient_id", patientId)
       .single();
-    if ((result as any).error && (result as any).error.code === 'PGRST116') {
+    if ((result as any).error && (result as any).error.code === "PGRST116") {
       const insert = await supabase
-        .from('user_settings')
+        .from("user_settings")
         .insert({ patient_id: patientId } as any)
         .select()
         .single();
@@ -273,14 +296,17 @@ export const db = {
 
   upsertUserSettings: async (userId: string, payload: any) => {
     const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
       .single();
     if (patientError || !patient) return { data: null, error: patientError };
     const patientId = (patient as any).id;
-    return (supabase.from('user_settings') as any)
-      .upsert({ patient_id: patientId, ...payload } as any, { onConflict: 'patient_id' } as any)
+    return (supabase.from("user_settings") as any)
+      .upsert(
+        { patient_id: patientId, ...payload } as any,
+        { onConflict: "patient_id" } as any
+      )
       .select()
       .single();
   },
@@ -320,18 +346,18 @@ export const db = {
   // Deactivate expired medications automatically (app-side safety net)
   deactivateExpiredMedications: async (userId: string) => {
     const { data: patient, error: patientError } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
       .single();
     if (patientError || !patient) return { data: null, error: patientError };
     const patientId = (patient as any).id;
-    const today = new Date().toISOString().split('T')[0];
-    return (supabase.from('medications') as any)
+    const today = new Date().toISOString().split("T")[0];
+    return (supabase.from("medications") as any)
       .update({ is_active: false } as any)
-      .eq('patient_id', patientId)
-      .lt('end_date', today)
-      .eq('is_active', true);
+      .eq("patient_id", patientId)
+      .lt("end_date", today)
+      .eq("is_active", true);
   },
 
   getMedication: async (id: string) => {
@@ -403,42 +429,51 @@ export const db = {
   },
 
   // Utility: find an existing medication matching core fields
-  findExistingMedication: async (userId: string, generic: string, strength: string, form: string) => {
+  findExistingMedication: async (
+    userId: string,
+    generic: string,
+    strength: string,
+    form: string
+  ) => {
     const { data: patient } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
       .single();
     const patientId = (patient as any)?.id;
-    if (!patientId) return { data: null, error: { message: 'No patient' } };
+    if (!patientId) return { data: null, error: { message: "No patient" } };
     return supabase
-      .from('medications')
-      .select('*')
-      .eq('patient_id', patientId)
-      .eq('generic_name', generic)
-      .eq('strength', strength)
-      .eq('form', form)
+      .from("medications")
+      .select("*")
+      .eq("patient_id", patientId)
+      .eq("generic_name", generic)
+      .eq("strength", strength)
+      .eq("form", form)
       .limit(1)
       .single();
   },
 
   // Create new treatment reusing base fields from an existing medication
-  createMedicationTreatment: async (userId: string, data: any, reuseMedicationId?: string) => {
+  createMedicationTreatment: async (
+    userId: string,
+    data: any,
+    reuseMedicationId?: string
+  ) => {
     const { data: patient } = await supabase
-      .from('patients')
-      .select('id')
-      .eq('user_id', userId)
+      .from("patients")
+      .select("id")
+      .eq("user_id", userId)
       .single();
     const patientId = (patient as any)?.id;
-    if (!patientId) throw new Error('Patient not found');
+    if (!patientId) throw new Error("Patient not found");
 
     let base: any = { ...data };
     if (reuseMedicationId) {
-      const { data: existing } = await supabase
-        .from('medications')
-        .select('*')
-        .eq('id', reuseMedicationId)
-        .single();
+      const { data: existing } = (await supabase
+        .from("medications")
+        .select("*")
+        .eq("id", reuseMedicationId)
+        .single()) as { data: any; error: any };
       if (existing) {
         base = {
           generic_name: existing.generic_name,

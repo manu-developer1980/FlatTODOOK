@@ -14,9 +14,13 @@
     "check": "tsc -b --noEmit"
   },
   "dependencies": {
+    "@radix-ui/react-label": "^2.1.8",
+    "@radix-ui/react-slot": "^1.2.4",
+    "@radix-ui/react-switch": "^1.2.6",
     "@stripe/stripe-js": "^8.4.0",
     "@supabase/supabase-js": "^2.81.1",
     "@tanstack/react-query": "^5.90.8",
+    "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "concurrently": "^9.0.1",
     "cors": "^2.8.5",

@@ -4,6 +4,7 @@ import dotenv from 'dotenv'
 import { fileURLToPath } from 'url'
 import { dirname, join } from 'path'
 import subscriptionRoutes from './routes/subscriptions'
+import notificationRoutes from './routes/notifications'
 
 // Obtener __dirname equivalente en ES modules
 const __filename = fileURLToPath(import.meta.url)
@@ -25,6 +26,7 @@ app.use(express.raw({ type: 'application/json', limit: '10mb' }))
 
 // Rutas
 app.use('/api/subscriptions', subscriptionRoutes)
+app.use('/api/notifications', notificationRoutes)
 
 // Health check
 app.get('/api/health', (req, res) => {

@@ -23,6 +23,7 @@ import {
 import { es } from "date-fns/locale";
 import { toast } from "sonner";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
+import { hasUserId } from "@/lib/userUtils";
 
 interface DaySchedule {
   date: Date;
@@ -46,12 +47,12 @@ export default function Calendar() {
   const [processing, setProcessing] = useState<Record<string, boolean>>({});
   const [addOpen, setAddOpen] = useState(false);
   const [newTreatment, setNewTreatment] = useState({
-    medicationId: '',
-    dosage: '',
-    frequency: 'daily',
-    specific_times: ['08:00:00'],
-    start_date: new Date().toISOString().split('T')[0],
-    end_date: ''
+    medicationId: "",
+    dosage: "",
+    frequency: "daily",
+    specific_times: ["08:00:00"],
+    start_date: new Date().toISOString().split("T")[0],
+    end_date: "",
   });
 
   useEffect(() => {
@@ -69,11 +70,13 @@ export default function Calendar() {
       setLoading(true);
 
       // Safety net: deactivate expired medications
-      try { await (db as any).deactivateExpiredMedications(user.user_id); } catch {}
+      try {
+        await (db as any).deactivateExpiredMedications(user.id);
+      } catch {}
 
       // Get patient profile first
       const { data: patientData, error: patientError } = await db.getUser(
-        user.user_id
+        user.id
       );
       if (patientError || !patientData) {
         setLoading(false);
@@ -82,7 +85,7 @@ export default function Calendar() {
 
       // Get active medications for this patient
       const { data: medsData, error: medsError } = await db.getMedications(
-        user.user_id,
+        user.id,
         true
       );
       if (medsError) throw medsError;
@@ -93,19 +96,19 @@ export default function Calendar() {
       const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
       // Ensure schedules exist for this range (idempotent)
       await (db as any).ensureSchedulesForDateRange(
-        user.user_id,
+        user.id,
         startDate,
         endDate
       );
       const { data: schedulesData, error: schedulesError } = await (
         db as any
-      ).getSchedulesForDateRange(user.user_id, startDate, endDate);
+      ).getSchedulesForDateRange(user.id, startDate, endDate);
       if (schedulesError) throw schedulesError;
       setDosageSchedules(schedulesData || []);
 
       // Get intake logs for the current period
       const { data: logsData, error: logsError } = await db.getIntakeLogs(
-        user.user_id
+        user.id
       );
       if (logsError) throw logsError;
 
@@ -219,15 +222,25 @@ export default function Calendar() {
         return;
       }
 
-      const { data: existingLogs, error: existingError } = await (db as any).getIntakeLogForMedicationAtTime(
-        medicationId,
-        scheduledDate
-      );
-      if (!existingError && Array.isArray(existingLogs) && existingLogs.length > 0) {
+      const { data: existingLogs, error: existingError } = await (
+        db as any
+      ).getIntakeLogForMedicationAtTime(medicationId, scheduledDate);
+      if (
+        !existingError &&
+        Array.isArray(existingLogs) &&
+        existingLogs.length > 0
+      ) {
         if (!currentSchedule?.is_taken) {
-          const { error: updErr } = await db.updateScheduleStatus(scheduleId, "taken");
+          const { error: updErr } = await db.updateScheduleStatus(
+            scheduleId,
+            "taken"
+          );
           if (!updErr) {
-            setDosageSchedules((prev) => prev.map((s) => s.id === scheduleId ? { ...s, is_taken: true } : s));
+            setDosageSchedules((prev) =>
+              prev.map((s) =>
+                s.id === scheduleId ? { ...s, is_taken: true } : s
+              )
+            );
           }
         }
         toast.info("Este horario ya estaba registrado como tomado");
@@ -244,7 +257,9 @@ export default function Calendar() {
         toast.error("Error al actualizar el estado");
         return;
       }
-      setDosageSchedules((prev) => prev.map((s) => s.id === scheduleId ? { ...s, is_taken: true } : s));
+      setDosageSchedules((prev) =>
+        prev.map((s) => (s.id === scheduleId ? { ...s, is_taken: true } : s))
+      );
 
       // Crear el intake log para estadísticas
       console.log("Creating intake log for medication:", medicationId);
@@ -306,7 +321,7 @@ export default function Calendar() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
         {/* Header */}
-      <div className="mb-8">
+        <div className="mb-8">
           <h1 className="text-4xl font-bold text-gray-900 mb-4">
             Calendario de Medicamentos
           </h1>
@@ -322,21 +337,18 @@ export default function Calendar() {
               <button
                 onClick={() => navigateWeek("prev")}
                 className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors min-h-[44px]"
-                aria-label="Semana anterior"
-              >
+                aria-label="Semana anterior">
                 <ChevronLeft className="w-6 h-6" />
               </button>
               <button
                 onClick={navigateToToday}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]"
-              >
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]">
                 Hoy
               </button>
               <button
                 onClick={() => navigateWeek("next")}
                 className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors min-h-[44px]"
-                aria-label="Semana siguiente"
-              >
+                aria-label="Semana siguiente">
                 <ChevronRight className="w-6 h-6" />
               </button>
             </div>
@@ -357,8 +369,7 @@ export default function Calendar() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setAddOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]"
-              >
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]">
                 Añadir tratamiento
               </button>
             </div>
@@ -389,8 +400,7 @@ export default function Calendar() {
                       : isSelected
                       ? "bg-blue-50"
                       : "bg-white"
-                  }`}
-                >
+                  }`}>
                   {/* Day Header */}
                   <div
                     className={`flex items-center justify-between mb-4 cursor-pointer transition-colors ${
@@ -400,8 +410,7 @@ export default function Calendar() {
                         ? "bg-blue-100"
                         : "hover:bg-gray-50"
                     } p-4 rounded-lg`}
-                    onClick={() => setSelectedDate(day.date)}
-                  >
+                    onClick={() => setSelectedDate(day.date)}>
                     <div className="flex items-center gap-4">
                       <div className="text-center">
                         <div className="text-lg font-medium text-gray-500 mb-1">
@@ -410,8 +419,7 @@ export default function Calendar() {
                         <div
                           className={`text-3xl font-bold ${
                             isToday ? "text-green-600" : "text-gray-900"
-                          }`}
-                        >
+                          }`}>
                           {format(day.date, "d")}
                         </div>
                       </div>
@@ -461,8 +469,7 @@ export default function Calendar() {
                               med.taken
                                 ? "bg-green-50 border-green-200"
                                 : "bg-white border-gray-200 hover:bg-gray-50"
-                            }`}
-                          >
+                            }`}>
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <Clock className="w-5 h-5 text-gray-600" />
@@ -480,35 +487,62 @@ export default function Calendar() {
                                     Tomado
                                   </span>
                                 </div>
-                            ) : (
+                              ) : (
+                                <button
+                                  onClick={() =>
+                                    handleMarkAsTaken(
+                                      med.schedule.id,
+                                      med.medication.id
+                                    )
+                                  }
+                                  disabled={
+                                    new Date(
+                                      med.schedule.scheduled_time
+                                    ).getTime() > Date.now() ||
+                                    !!processing[med.schedule.id]
+                                  }
+                                  title={
+                                    new Date(
+                                      med.schedule.scheduled_time
+                                    ).getTime() > Date.now()
+                                      ? "No puedes marcar tomas futuras"
+                                      : undefined
+                                  }
+                                  className={`${
+                                    new Date(
+                                      med.schedule.scheduled_time
+                                    ).getTime() > Date.now()
+                                      ? "bg-red-600 hover:bg-red-700"
+                                      : "bg-green-600 hover:bg-green-700"
+                                  } text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]`}>
+                                  {new Date(
+                                    med.schedule.scheduled_time
+                                  ).getTime() > Date.now()
+                                    ? "Pendiente"
+                                    : "Tomar"}
+                                </button>
+                              )}
                               <button
-                                onClick={() =>
-                                  handleMarkAsTaken(
-                                    med.schedule.id,
-                                    med.medication.id
-                                  )
-                                }
-                                disabled={new Date(med.schedule.scheduled_time).getTime() > Date.now() || !!processing[med.schedule.id]}
-                                title={new Date(med.schedule.scheduled_time).getTime() > Date.now() ? "No puedes marcar tomas futuras" : undefined}
-                                className={`${new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]`}
-                              >
-                                {new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'Pendiente' : 'Tomar'}
+                                onClick={async () => {
+                                  try {
+                                    await (db as any).updateMedication(
+                                      med.medication.id,
+                                      {
+                                        is_active: false,
+                                        end_date: new Date()
+                                          .toISOString()
+                                          .split("T")[0],
+                                      }
+                                    );
+                                    toast.success("Tratamiento finalizado");
+                                    loadData();
+                                  } catch {
+                                    toast.error("No se pudo finalizar");
+                                  }
+                                }}
+                                className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]">
+                                Finalizar
                               </button>
-                            )}
-                            <button
-                              onClick={async () => {
-                                try {
-                                  await (db as any).updateMedication(med.medication.id, { is_active: false, end_date: new Date().toISOString().split('T')[0] });
-                                  toast.success('Tratamiento finalizado');
-                                  loadData();
-                                } catch {
-                                  toast.error('No se pudo finalizar');
-                                }
-                              }}
-                              className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]"
-                            >
-                              Finalizar
-                            </button>
                             </div>
 
                             <div className="flex items-start gap-3">
@@ -585,14 +619,12 @@ export default function Calendar() {
                             med.taken
                               ? "bg-green-50 border-green-200"
                               : "bg-white border-gray-200"
-                          }`}
-                        >
+                          }`}>
                           <div className="flex items-center gap-4">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                                 med.taken ? "bg-green-600" : "bg-gray-300"
-                              }`}
-                            >
+                              }`}>
                               {med.taken ? (
                                 <CheckCircle className="w-5 h-5 text-white" />
                               ) : (
@@ -629,25 +661,51 @@ export default function Calendar() {
                                   med.medication.id
                                 )
                               }
-                              disabled={new Date(med.schedule.scheduled_time).getTime() > Date.now() || !!processing[med.schedule.id]}
-                              title={new Date(med.schedule.scheduled_time).getTime() > Date.now() ? "No puedes marcar tomas futuras" : undefined}
-                              className={`${new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'bg-red-600 hover:bg-red-700' : 'bg-green-600 hover:bg-green-700'} text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]`}
-                            >
-                              {new Date(med.schedule.scheduled_time).getTime() > Date.now() ? 'Pendiente' : 'Marcar como tomado'}
+                              disabled={
+                                new Date(
+                                  med.schedule.scheduled_time
+                                ).getTime() > Date.now() ||
+                                !!processing[med.schedule.id]
+                              }
+                              title={
+                                new Date(
+                                  med.schedule.scheduled_time
+                                ).getTime() > Date.now()
+                                  ? "No puedes marcar tomas futuras"
+                                  : undefined
+                              }
+                              className={`${
+                                new Date(
+                                  med.schedule.scheduled_time
+                                ).getTime() > Date.now()
+                                  ? "bg-red-600 hover:bg-red-700"
+                                  : "bg-green-600 hover:bg-green-700"
+                              } text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]`}>
+                              {new Date(med.schedule.scheduled_time).getTime() >
+                              Date.now()
+                                ? "Pendiente"
+                                : "Marcar como tomado"}
                             </button>
                           )}
                           <button
                             onClick={async () => {
                               try {
-                                await (db as any).updateMedication(med.medication.id, { is_active: false, end_date: new Date().toISOString().split('T')[0] });
-                                toast.success('Tratamiento finalizado');
+                                await (db as any).updateMedication(
+                                  med.medication.id,
+                                  {
+                                    is_active: false,
+                                    end_date: new Date()
+                                      .toISOString()
+                                      .split("T")[0],
+                                  }
+                                );
+                                toast.success("Tratamiento finalizado");
                                 loadData();
                               } catch {
-                                toast.error('No se pudo finalizar');
+                                toast.error("No se pudo finalizar");
                               }
                             }}
-                            className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]"
-                          >
+                            className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]">
                             Finalizar
                           </button>
                         </div>
@@ -664,37 +722,57 @@ export default function Calendar() {
       {addOpen && (
         <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4">
           <div className="bg-white rounded-lg shadow-lg w-full max-w-2xl p-6">
-            <h3 className="text-2xl font-semibold text-gray-900 mb-4">Añadir tratamiento</h3>
+            <h3 className="text-2xl font-semibold text-gray-900 mb-4">
+              Añadir tratamiento
+            </h3>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Medicamento</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Medicamento
+                </label>
                 <select
                   value={newTreatment.medicationId}
-                  onChange={(e) => setNewTreatment({ ...newTreatment, medicationId: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                >
+                  onChange={(e) =>
+                    setNewTreatment({
+                      ...newTreatment,
+                      medicationId: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg">
                   <option value="">Selecciona…</option>
-                  {medications.map(m => (
-                    <option key={m.id} value={m.id}>{m.generic_name} {m.strength} ({m.form})</option>
+                  {medications.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.generic_name} {m.strength} ({m.form})
+                    </option>
                   ))}
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Dosis</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Dosis
+                </label>
                 <input
                   value={newTreatment.dosage}
-                  onChange={(e) => setNewTreatment({ ...newTreatment, dosage: e.target.value })}
+                  onChange={(e) =>
+                    setNewTreatment({ ...newTreatment, dosage: e.target.value })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                   placeholder="Ej: 1 comprimido"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Frecuencia</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Frecuencia
+                </label>
                 <select
                   value={newTreatment.frequency}
-                  onChange={(e) => setNewTreatment({ ...newTreatment, frequency: e.target.value })}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                >
+                  onChange={(e) =>
+                    setNewTreatment({
+                      ...newTreatment,
+                      frequency: e.target.value,
+                    })
+                  }
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg">
                   <option value="daily">Una vez al día</option>
                   <option value="twice_daily">Dos veces al día</option>
                   <option value="three_times_daily">Tres veces al día</option>
@@ -706,38 +784,67 @@ export default function Calendar() {
                 </select>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Horarios</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Horarios
+                </label>
                 <input
-                  value={newTreatment.specific_times.join(',')}
-                  onChange={(e) => setNewTreatment({ ...newTreatment, specific_times: e.target.value.split(',').map(s => s.trim()) })}
+                  value={newTreatment.specific_times.join(",")}
+                  onChange={(e) =>
+                    setNewTreatment({
+                      ...newTreatment,
+                      specific_times: e.target.value
+                        .split(",")
+                        .map((s) => s.trim()),
+                    })
+                  }
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                   placeholder="08:00:00, 20:00:00"
                 />
-                <p className="text-xs text-gray-500 mt-1">Formato HH:mm:ss, separados por comas</p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Formato HH:mm:ss, separados por comas
+                </p>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Inicio</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Inicio
+                  </label>
                   <input
                     type="date"
                     value={newTreatment.start_date}
-                    onChange={(e) => setNewTreatment({ ...newTreatment, start_date: e.target.value })}
+                    onChange={(e) =>
+                      setNewTreatment({
+                        ...newTreatment,
+                        start_date: e.target.value,
+                      })
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Fin</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Fin
+                  </label>
                   <input
                     type="date"
                     value={newTreatment.end_date}
-                    onChange={(e) => setNewTreatment({ ...newTreatment, end_date: e.target.value })}
+                    onChange={(e) =>
+                      setNewTreatment({
+                        ...newTreatment,
+                        end_date: e.target.value,
+                      })
+                    }
                     className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                   />
                 </div>
               </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
-              <button onClick={() => setAddOpen(false)} className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200">Cancelar</button>
+              <button
+                onClick={() => setAddOpen(false)}
+                className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200">
+                Cancelar
+              </button>
               <button
                 onClick={async () => {
                   if (!user || !newTreatment.medicationId) return;
@@ -750,16 +857,19 @@ export default function Calendar() {
                     is_active: true,
                   };
                   try {
-                    await (db as any).createMedicationTreatment(user.user_id, payload, newTreatment.medicationId);
-                    toast.success('Tratamiento creado');
+                    await (db as any).createMedicationTreatment(
+                      user.id,
+                      payload,
+                      newTreatment.medicationId
+                    );
+                    toast.success("Tratamiento creado");
                     setAddOpen(false);
                     loadData();
                   } catch (e) {
-                    toast.error('Error al crear tratamiento');
+                    toast.error("Error al crear tratamiento");
                   }
                 }}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
-              >
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">
                 Crear
               </button>
             </div>
