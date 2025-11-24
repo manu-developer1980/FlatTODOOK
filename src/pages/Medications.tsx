@@ -178,67 +178,19 @@ export default function Medications() {
                   />
                 </div>
 
-                {/* Dosage Info */}
+                {/* Inventory details (no dosage/pauta) */}
                 <div className="space-y-3 mb-4">
                   <div className="flex items-center gap-3 text-gray-700">
-                    <Pill className="w-5 h-5 text-green-600" />
-                    <span className="text-base font-medium">
-                      {medication.dosage}
-                    </span>
+                    <Clock className="w-5 h-5 text-green-600" />
+                    <span className="text-base">Formato: {medication.form}</span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-700">
-                    <Clock className="w-5 h-5 text-green-600" />
-                    <span className="text-base">
-                      {medication.frequency === 'daily' && 'Una vez al día'}
-                      {medication.frequency === 'twice_daily' && 'Dos veces al día'}
-                      {medication.frequency === 'three_times_daily' && 'Tres veces al día'}
-                      {medication.frequency === 'four_times_daily' && 'Cuatro veces al día'}
-                      {medication.frequency === 'every_4_hours' && 'Cada 4 horas'}
-                      {medication.frequency === 'every_6_hours' && 'Cada 6 horas'}
-                      {medication.frequency === 'every_8_hours' && 'Cada 8 horas'}
-                      {medication.frequency === 'every_12_hours' && 'Cada 12 horas'}
-                      {medication.frequency === 'weekly' && 'Semanalmente'}
-                      {medication.frequency === 'monthly' && 'Mensualmente'}
-                      {medication.frequency === 'as_needed' && 'Cuando sea necesario'}
-                    </span>
+                    <Pill className="w-5 h-5 text-green-600" />
+                    <span className="text-base">Concentración: {medication.strength}</span>
                   </div>
-                  {medication.start_date && (
-                    <div className="flex items-center gap-3 text-gray-700">
-                      <Calendar className="w-5 h-5 text-green-600" />
-                      <span className="text-base">
-                        Desde {new Date(medication.start_date).toLocaleDateString('es-ES')}
-                      </span>
-                    </div>
-                  )}
-                  {medication.end_date && (
-                    <div className="flex items-center gap-3 text-gray-700">
-                      <Calendar className="w-5 h-5 text-green-600" />
-                      <span className="text-base">
-                        Hasta {new Date(medication.end_date).toLocaleDateString('es-ES')}
-                      </span>
-                    </div>
-                  )}
                 </div>
 
-                {/* Specific Times */}
-                {medication.specific_times && medication.specific_times.length > 0 && (
-                  <div className="mb-4">
-                    <h4 className="text-sm font-medium text-gray-900 mb-2">Horarios:</h4>
-                    <div className="space-y-1">
-                      {medication.specific_times.slice(0, 3).map((time, index) => (
-                        <div key={index} className="flex items-center gap-2 text-sm text-gray-600">
-                          <Clock className="w-4 h-4" />
-                          <span>{time}</span>
-                        </div>
-                      ))}
-                      {medication.specific_times.length > 3 && (
-                        <div className="text-sm text-gray-500">
-                          +{medication.specific_times.length - 3} horarios más
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
+                {/* No schedule details in inventory view */}
 
                 {/* Actions */}
                 <div className="flex gap-2 pt-4 border-t border-gray-200">
@@ -281,12 +233,7 @@ export default function Medications() {
                 </div>
                 <div className="text-sm text-gray-600">Inactivos</div>
               </div>
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {medications.reduce((total, med) => total + (med.specific_times?.length || 0), 0)}
-                </div>
-                <div className="text-sm text-gray-600">Horarios totales</div>
-              </div>
+              
               <div className="text-center p-4 bg-purple-50 rounded-lg">
                 <div className="text-2xl font-bold text-purple-600">
                   {medications.length}
