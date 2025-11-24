@@ -24,6 +24,7 @@ export default function Medications() {
     
     try {
       setLoading(true);
+      try { await (db as any).deactivateExpiredMedications(user.user_id); } catch {}
       
       // Get patient profile first
       const { data: patientData, error: patientError } = await db.getUser(user.user_id);

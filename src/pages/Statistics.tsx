@@ -82,6 +82,8 @@ export default function Statistics() {
     try {
       setLoading(true);
       console.log('Loading data for user:', user.user_id);
+      // Safety net: deactivate expired medications
+      try { await (db as any).deactivateExpiredMedications(user.user_id); } catch {}
       const today = new Date();
       const startDate = timeRange === 'week' ? subDays(today, 7) :
                        timeRange === 'month' ? subDays(today, 30) :

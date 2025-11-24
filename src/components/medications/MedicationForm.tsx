@@ -53,6 +53,9 @@ export default function MedicationForm() {
   const [loading, setLoading] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [existingMeds, setExistingMeds] = useState<Medication[]>([]);
+  const [useExisting, setUseExisting] = useState(false);
+  const [existingMedId, setExistingMedId] = useState<string | null>(null);
   const [formData, setFormData] = useState<MedicationFormData>({
     generic_name: "",
     brand: "",
@@ -77,6 +80,7 @@ export default function MedicationForm() {
       loadMedication();
     }
     loadPatient();
+    loadExistingMeds();
   }, [id, user]);
 
   const loadPatient = async () => {
@@ -92,6 +96,14 @@ export default function MedicationForm() {
     } catch (error) {
       console.error("Error loading patient:", error);
     }
+  };
+
+  const loadExistingMeds = async () => {
+    if (!user) return;
+    try {
+      const { data } = await db.getMedications(user.user_id, true);
+      setExistingMeds((data as any[]) || []);
+    } catch {}
   };
 
   const loadMedication = async () => {
@@ -156,9 +168,10 @@ export default function MedicationForm() {
           throw new Error("Error al actualizar medicamento");
         }
       } else {
-        const response = await db.createMedication(
+        const response = await (db as any).createMedicationTreatment(
           user!.user_id,
-          medicationData
+          medicationData,
+          useExisting ? existingMedId ?? undefined : undefined
         );
         if (response.data) {
           toast.success("Medicamento creado correctamente");
@@ -506,12 +519,54 @@ export default function MedicationForm() {
             </div>
           </div>
 
-          {/* Schedule Configuration */}
-          <div className="bg-white rounded-lg shadow-sm p-8">
-            <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
-              <Clock className="w-6 h-6 text-green-600" />
-              Frecuencia y Horarios
-            </h2>
+        {/* Schedule Configuration */}
+        <div className="bg-white rounded-lg shadow-sm p-8">
+          <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
+            <Clock className="w-6 h-6 text-green-600" />
+            Frecuencia y Horarios
+          </h2>
+
+          {/* Reutilizar medicamento existente */}
+          {!isEdit && (
+            <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <label className="flex items-center gap-3 mb-3">
+                <input type="checkbox" checked={useExisting} onChange={(e) => setUseExisting(e.target.checked)} />
+                <span className="text-gray-800 font-medium">Reutilizar medicamento existente</span>
+              </label>
+              {useExisting && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Selecciona medicamento</label>
+                    <select
+                      value={existingMedId ?? ''}
+                      onChange={(e) => {
+                        const idSel = e.target.value || null;
+                        setExistingMedId(idSel);
+                        const med = existingMeds.find(m => m.id === idSel);
+                        if (med) {
+                          setFormData((prev) => ({
+                            ...prev,
+                            generic_name: med.generic_name,
+                            brand: med.brand || '',
+                            strength: med.strength || '',
+                            form: med.form,
+                            dosage: med.dosage,
+                          }));
+                        }
+                      }}
+                      className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                    >
+                      <option value="">Selecciona…</option>
+                      {existingMeds.map(m => (
+                        <option key={m.id} value={m.id}>{m.generic_name} {m.strength} ({m.form})</option>
+                      ))}
+                    </select>
+                  </div>
+                  <p className="text-sm text-gray-600">Se reutiliza la ficha; define aquí el nuevo rango y pauta.</p>
+                </div>
+              )}
+            </div>
+          )}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Frequency */}
@@ -604,7 +659,7 @@ export default function MedicationForm() {
             </div>
 
             {/* Custom Schedules */}
-            {(formData.frequency as string) !== "as_needed" && (
+        {(formData.frequency as string) !== "as_needed" && (
               <div className="mt-8">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-medium text-gray-900">

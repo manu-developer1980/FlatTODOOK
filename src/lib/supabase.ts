@@ -317,6 +317,23 @@ export const db = {
     return query.order("generic_name");
   },
 
+  // Deactivate expired medications automatically (app-side safety net)
+  deactivateExpiredMedications: async (userId: string) => {
+    const { data: patient, error: patientError } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    if (patientError || !patient) return { data: null, error: patientError };
+    const patientId = (patient as any).id;
+    const today = new Date().toISOString().split('T')[0];
+    return (supabase.from('medications') as any)
+      .update({ is_active: false } as any)
+      .eq('patient_id', patientId)
+      .lt('end_date', today)
+      .eq('is_active', true);
+  },
+
   getMedication: async (id: string) => {
     return supabase.from("medications").select("*").eq("id", id).single();
   },
@@ -383,6 +400,63 @@ export const db = {
     }
 
     return inserted;
+  },
+
+  // Utility: find an existing medication matching core fields
+  findExistingMedication: async (userId: string, generic: string, strength: string, form: string) => {
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    const patientId = (patient as any)?.id;
+    if (!patientId) return { data: null, error: { message: 'No patient' } };
+    return supabase
+      .from('medications')
+      .select('*')
+      .eq('patient_id', patientId)
+      .eq('generic_name', generic)
+      .eq('strength', strength)
+      .eq('form', form)
+      .limit(1)
+      .single();
+  },
+
+  // Create new treatment reusing base fields from an existing medication
+  createMedicationTreatment: async (userId: string, data: any, reuseMedicationId?: string) => {
+    const { data: patient } = await supabase
+      .from('patients')
+      .select('id')
+      .eq('user_id', userId)
+      .single();
+    const patientId = (patient as any)?.id;
+    if (!patientId) throw new Error('Patient not found');
+
+    let base: any = { ...data };
+    if (reuseMedicationId) {
+      const { data: existing } = await supabase
+        .from('medications')
+        .select('*')
+        .eq('id', reuseMedicationId)
+        .single();
+      if (existing) {
+        base = {
+          generic_name: existing.generic_name,
+          brand: existing.brand,
+          strength: existing.strength,
+          form: existing.form,
+          dosage: data.dosage ?? existing.dosage,
+          frequency: data.frequency ?? existing.frequency,
+          specific_times: data.specific_times ?? existing.specific_times ?? [],
+          start_date: data.start_date,
+          end_date: data.end_date,
+          instructions: data.instructions ?? existing.instructions,
+          is_active: true,
+        };
+      }
+    }
+
+    return db.createMedication(userId, base);
   },
 
   updateMedication: async (id: string, data: any) => {

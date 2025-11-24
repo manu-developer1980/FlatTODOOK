@@ -59,6 +59,9 @@ export default function Calendar() {
     try {
       setLoading(true);
 
+      // Safety net: deactivate expired medications
+      try { await (db as any).deactivateExpiredMedications(user.user_id); } catch {}
+
       // Get patient profile first
       const { data: patientData, error: patientError } = await db.getUser(
         user.user_id
