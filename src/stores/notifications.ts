@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Notification, Patient } from "@/types";
 import { supabase } from "@/lib/supabase";
+import { apiRequest } from "@/lib/api";
 
 interface NotificationsState {
   notifications: Notification[];
@@ -118,24 +119,17 @@ export const useNotificationsStore = create<NotificationsState>()(
       loadNotifications: async (userId) => {
         set({ isLoading: true, error: null });
         try {
-          // First get the patient ID for this user
-          const { data: patient, error: patientError } = (await supabase
-            .from("patients")
-            .select("id")
-            .eq("user_id", userId)
-            .single()) as { data: Patient | null; error: any };
-
-          if (patientError || !patient) {
-            console.error("Could not find patient profile for user:", userId);
-            set({
-              notifications: [],
-              unreadCount: 0,
-              isLoading: false,
-            });
-            return;
+          const me = await apiRequest("/patients/me", { method: "GET" });
+          if (!me.success || !(me as any).patientId) {
+            const ensure = await apiRequest("/patients/ensure", { method: "POST" });
+            const me2 = await apiRequest("/patients/me", { method: "GET" });
+            if (!me2.success || !(me2 as any).patientId) {
+              set({ notifications: [], unreadCount: 0, isLoading: false });
+              return;
+            }
+            (me as any).patientId = (me2 as any).patientId;
           }
-
-          const patientId = patient.id;
+          const patientId = (me as any).patientId as string;
 
           const { data, error } = await supabase
             .from("notifications")
@@ -166,21 +160,14 @@ export const useNotificationsStore = create<NotificationsState>()(
 
         // Get patient ID first
         const setupSubscription = async () => {
-          const { data: patient, error: patientError } = (await supabase
-            .from("patients")
-            .select("id")
-            .eq("user_id", userId)
-            .single()) as { data: Patient | null; error: any };
-
-          if (patientError || !patient) {
-            console.error(
-              "Could not find patient profile for subscription:",
-              userId
-            );
-            return () => {}; // Return empty cleanup function
+          const me = await apiRequest("/patients/me", { method: "GET" });
+          if (!me.success || !(me as any).patientId) {
+            const ensure = await apiRequest("/patients/ensure", { method: "POST" });
+            const me2 = await apiRequest("/patients/me", { method: "GET" });
+            if (!me2.success || !(me2 as any).patientId) return () => {};
+            (me as any).patientId = (me2 as any).patientId;
           }
-
-          patientId = patient.id;
+          patientId = (me as any).patientId as string;
 
           const subscription = supabase
             .channel(`notifications:${patientId}`)

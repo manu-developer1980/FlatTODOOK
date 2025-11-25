@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useAuthStore } from "../stores/auth";
 import { db } from "../lib/supabase";
-import { Medication, Patient } from "../types";
+import { Medication, Patient, MEDICATION_FORMS } from "../types";
 import LoadingSpinner from "../components/ui/LoadingSpinner";
 import { toast } from "sonner";
 import { hasUserId } from "@/lib/userUtils";
@@ -29,7 +29,7 @@ export default function Medications() {
 
   useEffect(() => {
     loadMedications();
-  }, [user]);
+  }, [user, filterType]);
 
   const loadMedications = async () => {
     if (!user) return;
@@ -50,7 +50,7 @@ export default function Medications() {
         // Get medications for this patient
         const { data: medsData, error: medsError } = await db.getMedications(
           user.id,
-          true
+          filterType === "active"
         );
         if (!medsError) {
           setMedications(medsData || []);
@@ -69,12 +69,35 @@ export default function Medications() {
       return;
 
     try {
-      await db.deleteMedication(medicationId);
+      const { error } = await (db as any).deleteMedication(medicationId);
+      if (error) throw error;
       toast.success("Medicamento eliminado correctamente");
-      loadMedications();
+      setMedications((prev) => {
+        return prev.filter((m) => m.id !== medicationId);
+      });
     } catch (error) {
       console.error("Error deleting medication:", error);
       toast.error("Error al eliminar medicamento");
+    }
+  };
+
+  const handleFinalize = async (medicationId: string) => {
+    if (
+      !confirm(
+        "¿Finalizar tratamiento? Se mantendrá el histórico y se eliminarán futuras tomas pendientes."
+      )
+    )
+      return;
+    try {
+      const { error } = await (db as any).finalizeMedication(medicationId);
+      if (error) throw error;
+      toast.success(
+        "Tratamiento finalizado. Histórico preservado, futuras tomas eliminadas."
+      );
+      loadMedications();
+    } catch (error) {
+      console.error("Error finalizing medication:", error);
+      toast.error("Error al finalizar tratamiento");
     }
   };
 
@@ -136,7 +159,8 @@ export default function Medications() {
                 value={filterType}
                 onChange={(e) => setFilterType(e.target.value as any)}
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
-                aria-label="Filtrar medicamentos">
+                aria-label="Filtrar medicamentos"
+              >
                 <option value="all">Todos los medicamentos</option>
                 <option value="active">Medicamentos activos</option>
                 <option value="inactive">Medicamentos inactivos</option>
@@ -147,7 +171,8 @@ export default function Medications() {
             <Link
               to="/medications/add"
               className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px]"
-              aria-label="Añadir nuevo medicamento">
+              aria-label="Añadir nuevo medicamento"
+            >
               <Plus className="w-6 h-6" />
               Añadir Medicamento
             </Link>
@@ -171,7 +196,8 @@ export default function Medications() {
             {medications.length === 0 && (
               <Link
                 to="/medications/add"
-                className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-semibold text-lg inline-flex items-center gap-2 transition-colors min-h-[44px]">
+                className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-semibold text-lg inline-flex items-center gap-2 transition-colors min-h-[44px]"
+              >
                 <Plus className="w-6 h-6" />
                 Añadir Primer Medicamento
               </Link>
@@ -186,7 +212,8 @@ export default function Medications() {
                   medication.is_active
                     ? "border-green-200 hover:border-green-300"
                     : "border-gray-200 hover:border-gray-300"
-                }`}>
+                }`}
+              >
                 {/* Medication Header */}
                 <div className="flex items-start justify-between mb-4">
                   <div className="flex-1">
@@ -212,7 +239,8 @@ export default function Medications() {
                   <div className="flex items-center gap-3 text-gray-700">
                     <Clock className="w-5 h-5 text-green-600" />
                     <span className="text-base">
-                      Formato: {medication.form}
+                      Formato:{" "}
+                      {MEDICATION_FORMS[medication.form] || medication.form}
                     </span>
                   </div>
                   <div className="flex items-center gap-3 text-gray-700">
@@ -230,14 +258,25 @@ export default function Medications() {
                   <Link
                     to={`/medications/edit/${medication.id}`}
                     className="flex-1 bg-gray-100 hover:bg-gray-200 text-gray-700 px-4 py-3 rounded-lg font-medium text-base flex items-center justify-center gap-2 transition-colors min-h-[44px]"
-                    aria-label={`Editar ${medication.generic_name}`}>
+                    aria-label={`Editar ${medication.generic_name}`}
+                  >
                     <Edit2 className="w-5 h-5" />
                     Editar
                   </Link>
+                  {medication.is_active && (
+                    <button
+                      onClick={() => handleFinalize(medication.id)}
+                      className="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 px-4 py-3 rounded-lg font-medium text-base flex items-center justify-center gap-2 transition-colors min-h-[44px]"
+                      aria-label={`Finalizar ${medication.generic_name}`}
+                    >
+                      Finalizar
+                    </button>
+                  )}
                   <button
                     onClick={() => handleDelete(medication.id)}
                     className="bg-red-100 hover:bg-red-200 text-red-700 px-4 py-3 rounded-lg font-medium text-base flex items-center justify-center gap-2 transition-colors min-h-[44px]"
-                    aria-label={`Eliminar ${medication.generic_name}`}>
+                    aria-label={`Eliminar ${medication.generic_name}`}
+                  >
                     <Trash2 className="w-5 h-5" />
                     Eliminar
                   </button>

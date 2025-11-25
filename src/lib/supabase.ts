@@ -39,6 +39,19 @@ export const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
   },
 });
 
+async function apiGetTodaySchedules() {
+  const { apiRequest } = await import("./api");
+  return apiRequest("/patients/schedules/today", { method: "GET" });
+}
+
+async function apiMarkScheduleTaken(scheduleId: string) {
+  const { apiRequest } = await import("./api");
+  return apiRequest("/patients/schedules/mark-taken", {
+    method: "POST",
+    body: JSON.stringify({ scheduleId }),
+  });
+}
+
 // Auth helpers
 export const auth = {
   signUp: async (email: string, password: string, metadata: any) => {
@@ -141,7 +154,10 @@ export const db = {
     console.log("Patients query result:", result);
 
     // If patient profile doesn't exist, create it
-    if (result.error && result.error.code === "PGRST116") {
+    if (
+      result.error &&
+      (result.error.code === "PGRST116" || (result as any).status === 406)
+    ) {
       console.log(
         "Patient profile not found, creating new profile for user:",
         userId
@@ -160,40 +176,22 @@ export const db = {
         };
       }
 
-      console.log("Creating patient profile using function");
+      console.log("Ensuring patient profile via backend API");
 
-      // Use the create_patient_profile function to bypass RLS
-      const { data: patientId, error: functionError } = await supabase.rpc(
-        "create_patient_profile",
-        {
-          p_user_id: userId,
-          p_first_name:
-            user.user_metadata?.full_name ||
-            user.email?.split("@")[0] ||
-            "Usuario",
-          p_last_name: "",
-          p_date_of_birth: "1990-01-01",
-          p_gender: null,
-          p_phone_number: null,
-          p_emergency_contact_name: null,
-          p_emergency_contact_phone: null,
-          p_medical_conditions: null,
-          p_allergies: null,
-          p_preferred_language: "es",
-          p_timezone: "Europe/Madrid",
-          p_profile_completed: false,
-        }
-      );
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
 
-      if (functionError) {
+      if (!ensure.success) {
         console.error(
-          "Error creating patient profile via function:",
-          functionError
+          "Error ensuring patient profile via backend:",
+          ensure.error
         );
-        return { data: null, error: functionError };
+        return {
+          data: null,
+          error: { message: ensure.error || "Ensure failed" } as any,
+        } as any;
       }
-
-      console.log("Patient profile created successfully with ID:", patientId);
 
       // Get the newly created patient profile
       const { data: newPatient, error: selectError } = await supabase
@@ -275,8 +273,23 @@ export const db = {
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
-    if (patientError || !patient) return { data: null, error: patientError };
+    if (patientError || !patient) {
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: null, error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: null, error: patientError } as any;
+    }
     const patientId = (patient as any).id;
     const result = await supabase
       .from("user_settings")
@@ -299,8 +312,23 @@ export const db = {
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
-    if (patientError || !patient) return { data: null, error: patientError };
+    if (patientError || !patient) {
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: null, error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: null, error: patientError } as any;
+    }
     const patientId = (patient as any).id;
     return (supabase.from("user_settings") as any)
       .upsert(
@@ -322,14 +350,27 @@ export const db = {
   // Medications - Get medications through patient relationship
   getMedications: async (userId: string, activeOnly = true) => {
     // First get the patient ID for this user
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (patientError || !patient) {
-      return { data: [], error: patientError };
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: [], error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: [], error: patientError } as any;
     }
 
     const patientId = (patient as any).id;
@@ -345,12 +386,27 @@ export const db = {
 
   // Deactivate expired medications automatically (app-side safety net)
   deactivateExpiredMedications: async (userId: string) => {
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
-    if (patientError || !patient) return { data: null, error: patientError };
+    if (patientError || !patient) {
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: null, error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: null, error: patientError } as any;
+    }
     const patientId = (patient as any).id;
     const today = new Date().toISOString().split("T")[0];
     return (supabase.from("medications") as any)
@@ -366,14 +422,27 @@ export const db = {
 
   createMedication: async (userId: string, data: any) => {
     // First get the patient ID for this user
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (patientError || !patient) {
-      throw new Error("Patient profile not found");
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) throw new Error("Patient profile not found");
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) throw new Error("Patient profile not found");
     }
 
     const patientId = (patient as any).id;
@@ -435,13 +504,31 @@ export const db = {
     strength: string,
     form: string
   ) => {
-    const { data: patient } = await supabase
+    let { data: patient } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
-    const patientId = (patient as any)?.id;
-    if (!patientId) return { data: null, error: { message: "No patient" } };
+    let patientId = (patient as any)?.id;
+    if (!patientId) {
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success)
+        return { data: null, error: { message: "No patient" } } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      patientId = (patient as any)?.id;
+      if (!patientId)
+        return { data: null, error: { message: "No patient" } } as any;
+    }
     return supabase
       .from("medications")
       .select("*")
@@ -503,18 +590,36 @@ export const db = {
   },
 
   deleteMedication: async (id: string) => {
-    return (supabase.from("medications") as any)
-      .update({ is_active: false })
-      .eq("id", id);
+    const { apiRequest } = await import("./api");
+    const res = await apiRequest("/patients/medications/delete", {
+      method: "POST",
+      body: JSON.stringify({ medicationId: id }),
+    });
+    if ((res as any).success) return { data: true, error: null } as any;
+    return {
+      data: null,
+      error: { message: (res as any).error || "Failed" },
+    } as any;
+  },
+
+  finalizeMedication: async (id: string) => {
+    const res = await apiFinalizeMedication(id);
+    if ((res as any).success) return { data: true, error: null } as any;
+    return {
+      data: null,
+      error: { message: (res as any).error || "Failed" },
+    } as any;
   },
 
   // Intake Logs - Get through medication -> patient relationship
   getIntakeLogs: async (userId: string) => {
     // Get patient ID first
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     console.log("getIntakeLogs - patient lookup:", {
@@ -524,7 +629,18 @@ export const db = {
     });
 
     if (patientError || !patient) {
-      return { data: [], error: patientError };
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: [], error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: [], error: patientError } as any;
     }
 
     const patientId = (patient as any).id;
@@ -572,36 +688,13 @@ export const db = {
 
   // Dosage Schedules - Get through medication -> patient relationship
   getTodaySchedule: async (userId: string) => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(now);
-    end.setHours(23, 59, 59, 999);
-
-    // Get patient ID first
-    const { data: patient, error: patientError } = await supabase
-      .from("patients")
-      .select("id")
-      .eq("user_id", userId)
-      .single();
-
-    if (patientError || !patient) {
-      return { data: [], error: patientError };
-    }
-
-    const patientId = (patient as any).id;
-    return supabase
-      .from("dosage_schedules")
-      .select(
-        `
-        *,
-        medications!inner(*)
-      `
-      )
-      .eq("medications.patient_id", patientId)
-      .gte("scheduled_time", start.toISOString())
-      .lt("scheduled_time", end.toISOString())
-      .order("scheduled_time");
+    const res = await apiGetTodaySchedules();
+    if ((res as any).success)
+      return { data: (res as any).data, error: null } as any;
+    return {
+      data: [],
+      error: { message: (res as any).error || "Failed" },
+    } as any;
   },
 
   // Get schedules for a date range (for calendar view)
@@ -611,14 +704,27 @@ export const db = {
     endDate: Date
   ) => {
     // Get patient ID first
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
 
     if (patientError || !patient) {
-      return { data: [], error: patientError };
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: [], error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: [], error: patientError } as any;
     }
 
     const patientId = (patient as any).id;
@@ -642,12 +748,27 @@ export const db = {
     startDate: Date,
     endDate: Date
   ) => {
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .single();
-    if (patientError || !patient) return { data: null, error: patientError };
+    if (patientError || !patient) {
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: null, error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()) as any);
+      if (!patient) return { data: null, error: patientError } as any;
+    }
     const patientId = (patient as any).id;
 
     const { data: medications } = await supabase
@@ -770,12 +891,16 @@ export const db = {
   },
 
   updateScheduleStatus: async (id: string, status: string, notes?: string) => {
-    return (
-      (supabase.from("dosage_schedules") as any).update({
-        is_taken: status === "taken",
-        notes,
-      } as any) as any
-    )
+    if (status === "taken") {
+      const res = await apiMarkScheduleTaken(id);
+      if ((res as any).success) return { data: true, error: null } as any;
+      return {
+        data: null,
+        error: { message: (res as any).error || "Failed" },
+      } as any;
+    }
+    return (supabase.from("dosage_schedules") as any)
+      .update({ is_taken: status === "taken", notes } as any)
       .eq("id", id)
       .select()
       .single();
@@ -810,10 +935,18 @@ export const db = {
 
   // Statistics - Get user stats directly
   getAdherenceStats: async (userId: string) => {
+    try {
+      const { apiRequest } = await import("./api");
+      const res = await apiRequest("/patients/stats", { method: "GET" });
+      if (res.success && (res as any).stats)
+        return { data: (res as any).stats, error: null } as any;
+    } catch {}
     return supabase
       .from("user_stats")
       .select("*")
       .eq("user_id", userId)
+      .order("updated_at", { ascending: false })
+      .limit(1)
       .single();
   },
 
@@ -834,14 +967,23 @@ export const db = {
   // Notifications - Get through patient relationship
   getNotifications: async (userId: string, limit = 50) => {
     // Get patient ID first
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
       .single();
 
     if (patientError || !patient) {
-      return { data: [], error: patientError };
+      const ensure = await (
+        await import("./api")
+      ).apiRequest("/patients/ensure", { method: "POST" });
+      if (!ensure.success) return { data: [], error: patientError } as any;
+      ({ data: patient } = (await supabase
+        .from("patients")
+        .select("id")
+        .eq("user_id", userId)
+        .single()) as any);
+      if (!patient) return { data: [], error: patientError } as any;
     }
 
     const patientId = (patient as any).id;
@@ -956,3 +1098,10 @@ export const {
   getNotifications,
   markNotificationAsRead,
 } = db;
+async function apiFinalizeMedication(medicationId: string) {
+  const { apiRequest } = await import("./api");
+  return apiRequest("/patients/medications/finalize", {
+    method: "POST",
+    body: JSON.stringify({ medicationId }),
+  });
+}

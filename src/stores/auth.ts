@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { AuthUser } from "@supabase/supabase-js";
 import { auth, db } from "../lib/supabase";
+import { apiRequest } from "@/lib/api";
 import { SubscriptionService } from "@/services/subscriptionService";
 import { Subscription } from "@/services/subscriptionService";
 import { UserProfile } from "@/types/database";
@@ -51,23 +52,12 @@ export const useAuthStore = create<AuthState>()(
             console.log("Sign in successful, user:", data.user.id);
             console.log("Session:", data.session);
 
-            // Fetch user profile
-            console.log("Fetching user profile for userId:", data.user.id);
-            const { data: userData, error: userError } = await db.getUser(
-              data.user.id
-            );
-            console.log("User profile fetch result:", { userData, userError });
-
-            if (userError) {
-              console.error("User profile fetch error:", userError);
-              throw userError;
-            }
-
-            // Load subscription
+            // Ensure patient profile exists and load subscription
+            await apiRequest("/patients/ensure", { method: "POST" });
             const subscription = await SubscriptionService.getSubscription();
 
             set({
-              user: userData,
+              user: data.user,
               session: data.session,
               subscription,
               loading: false,
@@ -193,23 +183,12 @@ export const useAuthStore = create<AuthState>()(
 
           if (session?.user) {
             console.log("Session found, user:", session.user.id);
-            console.log("Fetching user profile for session user...");
-
-            const { data: userData, error: userError } = await db.getUser(
-              session.user.id
-            );
-            console.log("User profile fetch result:", { userData, userError });
-
-            if (userError) {
-              console.error("User profile fetch error:", userError);
-              throw userError;
-            }
-
-            // Load subscription
+            // Ensure patient profile and load subscription
+            await apiRequest("/patients/ensure", { method: "POST" });
             const subscription = await SubscriptionService.getSubscription();
 
             set({
-              user: userData,
+              user: session.user,
               session: session,
               subscription,
               loading: false,

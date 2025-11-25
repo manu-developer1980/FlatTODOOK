@@ -10,7 +10,12 @@ import {
 import { useAuthStore } from "../stores/auth";
 import { db } from "../lib/supabase";
 // import { NotificationService } from '../services/notificationService';
-import { Medication, DosageSchedule, IntakeLog } from "../types";
+import {
+  Medication,
+  DosageSchedule,
+  IntakeLog,
+  MEDICATION_FORMS,
+} from "../types";
 import {
   format,
   addDays,
@@ -50,10 +55,39 @@ export default function Calendar() {
     medicationId: "",
     dosage: "",
     frequency: "daily",
-    specific_times: ["08:00:00"],
+    specific_times: ["09:00:00"],
     start_date: new Date().toISOString().split("T")[0],
     end_date: "",
   });
+
+  const getDoseUnit = (form: Medication["form"] | undefined) => {
+    switch (form) {
+      case "tablet":
+        return "comprimidos";
+      case "capsule":
+        return "cápsulas";
+      case "liquid":
+        return "ml";
+      case "inhaler":
+        return "pufs";
+      case "drops":
+        return "gotas";
+      case "injection":
+        return "ml";
+      case "spray":
+        return "pulverizaciones";
+      case "patch":
+        return "parches";
+      default:
+        return "unidad";
+    }
+  };
+
+  const dosePlaceholder = (() => {
+    const med = medications.find((m) => m.id === newTreatment.medicationId);
+    const unit = getDoseUnit(med?.form);
+    return `Ej: 1 ${unit}`;
+  })();
 
   useEffect(() => {
     loadData();
@@ -86,7 +120,7 @@ export default function Calendar() {
       // Get active medications for this patient
       const { data: medsData, error: medsError } = await db.getMedications(
         user.id,
-        true
+        false
       );
       if (medsError) throw medsError;
       setMedications(medsData || []);
@@ -248,7 +282,7 @@ export default function Calendar() {
         return;
       }
 
-      const { error: updateError } = await db.updateScheduleStatus(
+      const { error: updateError } = await (db as any).updateScheduleStatus(
         scheduleId,
         "taken"
       );
@@ -337,18 +371,21 @@ export default function Calendar() {
               <button
                 onClick={() => navigateWeek("prev")}
                 className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors min-h-[44px]"
-                aria-label="Semana anterior">
+                aria-label="Semana anterior"
+              >
                 <ChevronLeft className="w-6 h-6" />
               </button>
               <button
                 onClick={navigateToToday}
-                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]">
+                className="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]"
+              >
                 Hoy
               </button>
               <button
                 onClick={() => navigateWeek("next")}
                 className="p-3 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors min-h-[44px]"
-                aria-label="Semana siguiente">
+                aria-label="Semana siguiente"
+              >
                 <ChevronRight className="w-6 h-6" />
               </button>
             </div>
@@ -369,7 +406,8 @@ export default function Calendar() {
             <div className="flex items-center gap-3">
               <button
                 onClick={() => setAddOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]">
+                className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold text-lg transition-colors min-h-[44px]"
+              >
                 Añadir tratamiento
               </button>
             </div>
@@ -400,7 +438,8 @@ export default function Calendar() {
                       : isSelected
                       ? "bg-blue-50"
                       : "bg-white"
-                  }`}>
+                  }`}
+                >
                   {/* Day Header */}
                   <div
                     className={`flex items-center justify-between mb-4 cursor-pointer transition-colors ${
@@ -410,7 +449,8 @@ export default function Calendar() {
                         ? "bg-blue-100"
                         : "hover:bg-gray-50"
                     } p-4 rounded-lg`}
-                    onClick={() => setSelectedDate(day.date)}>
+                    onClick={() => setSelectedDate(day.date)}
+                  >
                     <div className="flex items-center gap-4">
                       <div className="text-center">
                         <div className="text-lg font-medium text-gray-500 mb-1">
@@ -419,7 +459,8 @@ export default function Calendar() {
                         <div
                           className={`text-3xl font-bold ${
                             isToday ? "text-green-600" : "text-gray-900"
-                          }`}>
+                          }`}
+                        >
                           {format(day.date, "d")}
                         </div>
                       </div>
@@ -469,7 +510,8 @@ export default function Calendar() {
                               med.taken
                                 ? "bg-green-50 border-green-200"
                                 : "bg-white border-gray-200 hover:bg-gray-50"
-                            }`}>
+                            }`}
+                          >
                             <div className="flex items-center justify-between mb-3">
                               <div className="flex items-center gap-3">
                                 <Clock className="w-5 h-5 text-gray-600" />
@@ -514,7 +556,8 @@ export default function Calendar() {
                                     ).getTime() > Date.now()
                                       ? "bg-red-600 hover:bg-red-700"
                                       : "bg-green-600 hover:bg-green-700"
-                                  } text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]`}>
+                                  } text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[40px]`}
+                                >
                                   {new Date(
                                     med.schedule.scheduled_time
                                   ).getTime() > Date.now()
@@ -525,22 +568,18 @@ export default function Calendar() {
                               <button
                                 onClick={async () => {
                                   try {
-                                    await (db as any).updateMedication(
-                                      med.medication.id,
-                                      {
-                                        is_active: false,
-                                        end_date: new Date()
-                                          .toISOString()
-                                          .split("T")[0],
-                                      }
-                                    );
+                                    const { error } = await (
+                                      db as any
+                                    ).finalizeMedication(med.medication.id);
+                                    if (error) throw error;
                                     toast.success("Tratamiento finalizado");
                                     loadData();
                                   } catch {
                                     toast.error("No se pudo finalizar");
                                   }
                                 }}
-                                className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]">
+                                className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]"
+                              >
                                 Finalizar
                               </button>
                             </div>
@@ -619,12 +658,14 @@ export default function Calendar() {
                             med.taken
                               ? "bg-green-50 border-green-200"
                               : "bg-white border-gray-200"
-                          }`}>
+                          }`}
+                        >
                           <div className="flex items-center gap-4">
                             <div
                               className={`w-8 h-8 rounded-full flex items-center justify-center ${
                                 med.taken ? "bg-green-600" : "bg-gray-300"
-                              }`}>
+                              }`}
+                            >
                               {med.taken ? (
                                 <CheckCircle className="w-5 h-5 text-white" />
                               ) : (
@@ -680,7 +721,8 @@ export default function Calendar() {
                                 ).getTime() > Date.now()
                                   ? "bg-red-600 hover:bg-red-700"
                                   : "bg-green-600 hover:bg-green-700"
-                              } text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]`}>
+                              } text-white px-4 py-2 rounded-lg font-medium transition-colors min-h-[44px]`}
+                            >
                               {new Date(med.schedule.scheduled_time).getTime() >
                               Date.now()
                                 ? "Pendiente"
@@ -705,7 +747,8 @@ export default function Calendar() {
                                 toast.error("No se pudo finalizar");
                               }
                             }}
-                            className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]">
+                            className="ml-3 bg-gray-100 hover:bg-gray-200 text-gray-700 px-3 py-2 rounded-lg text-sm min-h-[36px]"
+                          >
                             Finalizar
                           </button>
                         </div>
@@ -732,17 +775,28 @@ export default function Calendar() {
                 </label>
                 <select
                   value={newTreatment.medicationId}
-                  onChange={(e) =>
+                  onChange={(e) => {
+                    const id = e.target.value;
+                    const med = medications.find((m) => m.id === id);
+                    const unit = getDoseUnit(med?.form);
                     setNewTreatment({
                       ...newTreatment,
-                      medicationId: e.target.value,
-                    })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg">
+                      medicationId: id,
+                      dosage: newTreatment.dosage?.trim()
+                        ? newTreatment.dosage
+                        : `1 ${unit}`,
+                    });
+                  }}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                >
                   <option value="">Selecciona…</option>
                   {medications.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.generic_name} {m.strength} ({m.form})
+                    <option
+                      key={m.id}
+                      value={m.id}
+                    >
+                      {m.generic_name} {m.strength} (
+                      {MEDICATION_FORMS[m.form] || m.form})
                     </option>
                   ))}
                 </select>
@@ -751,14 +805,40 @@ export default function Calendar() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Dosis
                 </label>
-                <input
-                  value={newTreatment.dosage}
-                  onChange={(e) =>
-                    setNewTreatment({ ...newTreatment, dosage: e.target.value })
-                  }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
-                  placeholder="Ej: 1 comprimido"
-                />
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min={0}
+                    step={1}
+                    value={(() => {
+                      const amt = newTreatment.dosage.match(/^[\d.]+/);
+                      return amt ? amt[0] : "";
+                    })()}
+                    onChange={(e) => {
+                      const med = medications.find(
+                        (m) => m.id === newTreatment.medicationId
+                      );
+                      const unit = getDoseUnit(med?.form);
+                      const val = e.target.value;
+                      setNewTreatment({
+                        ...newTreatment,
+                        dosage: val ? `${val} ${unit}` : "",
+                      });
+                    }}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                    placeholder={dosePlaceholder
+                      .replace(/Ej:\s*/i, "Ej: ")
+                      .replace(/\s+\w+$/, "")}
+                  />
+                  <span className="text-sm text-gray-600 whitespace-nowrap">
+                    {(() => {
+                      const med = medications.find(
+                        (m) => m.id === newTreatment.medicationId
+                      );
+                      return getDoseUnit(med?.form);
+                    })()}
+                  </span>
+                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -772,7 +852,8 @@ export default function Calendar() {
                       frequency: e.target.value,
                     })
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg">
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg"
+                >
                   <option value="daily">Una vez al día</option>
                   <option value="twice_daily">Dos veces al día</option>
                   <option value="three_times_daily">Tres veces al día</option>
@@ -842,7 +923,8 @@ export default function Calendar() {
             <div className="mt-6 flex justify-end gap-3">
               <button
                 onClick={() => setAddOpen(false)}
-                className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200">
+                className="px-4 py-2 rounded-lg bg-gray-100 hover:bg-gray-200"
+              >
                 Cancelar
               </button>
               <button
@@ -869,7 +951,8 @@ export default function Calendar() {
                     toast.error("Error al crear tratamiento");
                   }
                 }}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white">
+                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+              >
                 Crear
               </button>
             </div>

@@ -26,8 +26,10 @@ export default function Dashboard() {
       if (!user) return;
 
       try {
-        // Cargar horario de hoy
-        const { data: scheduleData } = await db.getTodaySchedule(user.id);
+        // Cargar horario de hoy (backend)
+        const { data: scheduleData } = await (db as any).getTodaySchedule(
+          user.id
+        );
         if (scheduleData) {
           setTodaySchedule(scheduleData);
         }
@@ -62,8 +64,8 @@ export default function Dashboard() {
       const scheduledDate =
         currentSchedule?.scheduled_time || new Date().toISOString();
 
-      // Update the schedule status
-      const { error: updateError } = await db.updateScheduleStatus(
+      // Marcar como tomada (backend)
+      const { error: updateError } = await (db as any).updateScheduleStatus(
         scheduleId,
         "taken"
       );
@@ -110,7 +112,9 @@ export default function Dashboard() {
       }
 
       // Reload data
-      const { data: newScheduleData } = await db.getTodaySchedule(user.id);
+      const { data: newScheduleData } = await (db as any).getTodaySchedule(
+        user.id
+      );
       if (newScheduleData) {
         setTodaySchedule(newScheduleData);
       }

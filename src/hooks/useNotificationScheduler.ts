@@ -16,11 +16,13 @@ export function useNotificationScheduler() {
   useEffect(() => {
     if (!hasUserId(user)) return;
 
-    // Load existing notifications
-    loadNotifications(user.id);
+    let unsubscribe: () => void = () => {};
 
-    // Subscribe to real-time notifications
-    const unsubscribe = subscribeToNotifications(user.id);
+    (async () => {
+      await apiRequest("/patients/ensure", { method: "POST" });
+      await loadNotifications(user.id);
+      unsubscribe = subscribeToNotifications(user.id);
+    })();
 
     // Set up periodic medication reminder checks
     const checkReminders = async () => {

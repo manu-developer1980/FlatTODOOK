@@ -62,6 +62,8 @@ export default function MedicationForm() {
   const [loading, setLoading] = useState(false);
   const [isEdit, setIsEdit] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
+  const [existingMeds, setExistingMeds] = useState<Medication[]>([]);
+  const [reuseMedicationId, setReuseMedicationId] = useState<string>("");
 
   const [formData, setFormData] = useState<MedicationFormData>({
     generic_name: "",
@@ -87,6 +89,7 @@ export default function MedicationForm() {
       loadMedication();
     }
     loadPatient();
+    loadExistingMedications();
   }, [id, user]);
 
   const loadPatient = async () => {
@@ -138,21 +141,20 @@ export default function MedicationForm() {
     }
   };
 
+  const loadExistingMedications = async () => {
+    if (!user) return;
+    try {
+      const { data: meds } = await db.getMedications(user.id, false);
+      setExistingMeds((meds as any) || []);
+    } catch {}
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !patient) return;
 
     try {
       setLoading(true);
-
-      const medicationData = {
-        generic_name: formData.generic_name,
-        brand: formData.brand,
-        strength: formData.strength,
-        form: formData.form,
-        dosage: "",
-        is_active: true,
-      } as any;
 
       if (isEdit && id) {
         const response = await db.updateMedication(id, medicationData);
@@ -162,11 +164,47 @@ export default function MedicationForm() {
           throw new Error("Error al actualizar medicamento");
         }
       } else {
-        const response = await db.createMedication(user!.id, medicationData);
-        if (response.data) {
-          toast.success("Medicamento creado correctamente");
+        if (reuseMedicationId) {
+          const response = await (db as any).createMedicationTreatment(
+            user!.id,
+            {
+              dosage: formData.dosage,
+              frequency: formData.frequency,
+              specific_times: formData.specific_times,
+              start_date: formData.start_date,
+              end_date: formData.end_date || null,
+              instructions: formData.instructions,
+              is_active: true,
+            },
+            reuseMedicationId
+          );
+          if ((response as any).data) {
+            toast.success(
+              "Tratamiento creado a partir de medicamento existente"
+            );
+          } else {
+            throw new Error("Error al crear tratamiento");
+          }
         } else {
-          throw new Error("Error al crear medicamento");
+          const medicationData = {
+            generic_name: formData.generic_name,
+            brand: formData.brand,
+            strength: formData.strength,
+            form: formData.form,
+            dosage: formData.dosage,
+            frequency: formData.frequency,
+            specific_times: formData.specific_times,
+            start_date: formData.start_date,
+            end_date: formData.end_date || null,
+            instructions: formData.instructions,
+            is_active: true,
+          } as any;
+          const response = await db.createMedication(user!.id, medicationData);
+          if (response.data) {
+            toast.success("Medicamento creado correctamente");
+          } else {
+            throw new Error("Error al crear medicamento");
+          }
         }
       }
 
@@ -289,7 +327,31 @@ export default function MedicationForm() {
           </p>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-8">
+        <form
+          onSubmit={handleSubmit}
+          className="space-y-8"
+        >
+          <div className="bg-white rounded-lg shadow-sm p-8">
+            <h2 className="text-2xl font-semibold text-gray-900 mb-6">
+              Reutilizar medicamento existente
+            </h2>
+            <select
+              value={reuseMedicationId}
+              onChange={(e) => setReuseMedicationId(e.target.value)}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+            >
+              <option value="">No reutilizar</option>
+              {existingMeds.map((m) => (
+                <option
+                  key={m.id}
+                  value={m.id}
+                >
+                  {m.generic_name} {m.brand ? `(${m.brand})` : ""} —{" "}
+                  {m.strength} — {m.form} {m.is_active ? "" : "(inactivo)"}
+                </option>
+              ))}
+            </select>
+          </div>
           {/* Basic Information */}
           <div className="bg-white rounded-lg shadow-sm p-8">
             <h2 className="text-2xl font-semibold text-gray-900 mb-6 flex items-center gap-3">
@@ -302,7 +364,8 @@ export default function MedicationForm() {
               <div className="md:col-span-2">
                 <label
                   htmlFor="generic_name"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Nombre Genérico *
                 </label>
                 <input
@@ -322,7 +385,8 @@ export default function MedicationForm() {
                 />
                 <p
                   id="generic-name-help"
-                  className="mt-2 text-sm text-gray-500">
+                  className="mt-2 text-sm text-gray-500"
+                >
                   Escribe el nombre genérico del medicamento
                 </p>
               </div>
@@ -331,7 +395,8 @@ export default function MedicationForm() {
               <div className="md:col-span-1">
                 <label
                   htmlFor="brand"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Marca
                 </label>
                 <input
@@ -350,7 +415,8 @@ export default function MedicationForm() {
               <div className="md:col-span-1">
                 <label
                   htmlFor="prescribed_by"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Médico que lo recetó
                 </label>
                 <input
@@ -372,7 +438,8 @@ export default function MedicationForm() {
               <div>
                 <label
                   htmlFor="form"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Forma del Medicamento
                 </label>
                 <select
@@ -384,9 +451,13 @@ export default function MedicationForm() {
                       form: e.target.value as Medication["form"],
                     }))
                   }
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg text-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                >
                   {medicationForms.map((form) => (
-                    <option key={form.value} value={form.value}>
+                    <option
+                      key={form.value}
+                      value={form.value}
+                    >
                       {form.label}
                     </option>
                   ))}
@@ -432,15 +503,22 @@ export default function MedicationForm() {
                         strength: amount ? `${amount}${unit}` : "",
                       }));
                     }}
-                    className="flex-1 px-1 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent">
+                    className="flex-1 px-1 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
+                  >
                     {concentrationUnits.map((unit) => (
-                      <option key={unit.value} value={unit.value}>
+                      <option
+                        key={unit.value}
+                        value={unit.value}
+                      >
                         {unit.label}
                       </option>
                     ))}
                   </select>
                 </div>
-                <p id="strength-help" className="mt-2 text-sm text-gray-500">
+                <p
+                  id="strength-help"
+                  className="mt-2 text-sm text-gray-500"
+                >
                   Ej: 500mg, 10ml, 5%
                 </p>
               </div>
@@ -449,7 +527,8 @@ export default function MedicationForm() {
               <div className="md:col-span-1">
                 <label
                   htmlFor="pharmacy_name"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Farmacia
                 </label>
                 <input
@@ -471,7 +550,8 @@ export default function MedicationForm() {
               <div className="md:col-span-1">
                 <label
                   htmlFor="pharmacy_phone"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Teléfono de Farmacia
                 </label>
                 <input
@@ -502,7 +582,8 @@ export default function MedicationForm() {
               <div>
                 <label
                   htmlFor="instructions"
-                  className="block text-lg font-medium text-gray-700 mb-3">
+                  className="block text-lg font-medium text-gray-700 mb-3"
+                >
                   Instrucciones
                 </label>
                 <textarea
@@ -521,7 +602,8 @@ export default function MedicationForm() {
                 />
                 <p
                   id="instructions-help"
-                  className="mt-2 text-sm text-gray-500">
+                  className="mt-2 text-sm text-gray-500"
+                >
                   Ej: "Tomar con comida", "Evitar alcohol", "Guardar en nevera"
                 </p>
               </div>
@@ -534,14 +616,16 @@ export default function MedicationForm() {
               type="button"
               onClick={() => navigate("/medications")}
               disabled={loading}
-              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-8 py-4 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px] disabled:opacity-50">
+              className="bg-gray-100 hover:bg-gray-200 text-gray-700 px-8 py-4 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px] disabled:opacity-50"
+            >
               <X className="w-6 h-6" />
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px] disabled:opacity-50">
+              className="bg-green-600 hover:bg-green-700 text-white px-8 py-4 rounded-lg font-semibold text-lg flex items-center gap-2 transition-colors min-h-[44px] disabled:opacity-50"
+            >
               <Save className="w-6 h-6" />
               {loading ? "Guardando..." : isEdit ? "Actualizar" : "Crear"}
             </button>
