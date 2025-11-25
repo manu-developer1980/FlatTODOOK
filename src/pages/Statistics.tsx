@@ -112,7 +112,7 @@ export default function Statistics() {
 
   useEffect(() => {
     calculateStatistics();
-  }, [medications, intakeLogs, timeRange]);
+  }, [medications, intakeLogs, schedules, timeRange]);
 
   const [schedules, setSchedules] = useState<any[]>([]);
 
@@ -136,7 +136,7 @@ export default function Statistics() {
 
       const [medsResponse, logsResponse, schedulesResponse] = await Promise.all(
         [
-          db.getMedications(user.id),
+          db.getMedications(user.id, false),
           db.getIntakeLogs(user.id),
           (db as any).getSchedulesForDateRange(user.id, startDate, today),
         ]
@@ -229,7 +229,7 @@ export default function Statistics() {
     calculateDailyAdherence(startDate, today);
 
     // Calculate medication-specific stats
-    calculateMedicationStats(activeMeds);
+    calculateMedicationStats(medications);
   };
 
   const calculateStreaks = () => {
@@ -330,56 +330,47 @@ export default function Statistics() {
     setDailyAdherence(dailyData);
   };
 
-  const calculateMedicationStats = (activeMeds: Medication[]) => {
-    console.log("Active medications:", activeMeds);
-    console.log("Intake logs:", intakeLogs);
+  const calculateMedicationStats = (_meds: Medication[]) => {
+    const today = new Date();
+    const startDate =
+      timeRange === "week"
+        ? subDays(today, 7)
+        : timeRange === "month"
+        ? subDays(today, 30)
+        : subDays(today, 90);
 
-    if (!intakeLogs || intakeLogs.length === 0) {
-      console.log("No intake logs found");
-      return;
-    }
+    const relevant = schedules.filter((s: any) => {
+      const d = parseISO(s.scheduled_time);
+      return d >= startDate && d <= today;
+    });
 
-    const stats: MedicationStats[] = activeMeds
-      .map((medication, index) => {
-        console.log(
-          `Processing medication: ${medication.generic_name} (ID: ${medication.id})`
-        );
+    const byMed = new Map<string, { name: string; expected: number; taken: number }>();
+    relevant.forEach((s: any) => {
+      const key = String(s.medication_id);
+      const current = byMed.get(key) || {
+        name:
+          (s.medications && (s.medications.generic_name || s.medications.brand)) ||
+          `Medicamento ${byMed.size + 1}`,
+        expected: 0,
+        taken: 0,
+      };
+      current.expected += 1;
+      if (s.is_taken) current.taken += 1;
+      byMed.set(key, current);
+    });
 
-        const medLogs = intakeLogs.filter((log) => {
-          console.log(
-            `Comparing log medication_id: ${log.medication_id} with medication id: ${medication.id}`
-          );
-          console.log(
-            `Types - log.medication_id: ${typeof log.medication_id}, medication.id: ${typeof medication.id}`
-          );
-          console.log(`Are they equal? ${log.medication_id === medication.id}`);
-          return log.medication_id === medication.id;
-        });
+    const stats: MedicationStats[] = Array.from(byMed.values()).map((v, i) => {
+      const adherence = v.expected > 0 ? (v.taken / v.expected) * 100 : 0;
+      return {
+        name: v.name,
+        adherence,
+        taken: v.taken,
+        total: v.expected,
+        color: COLORS[i % COLORS.length],
+      };
+    });
 
-        console.log(
-          `Found ${medLogs.length} logs for medication ${medication.generic_name}`
-        );
-        console.log("Matching logs:", medLogs);
-
-        const takenLogs = medLogs.filter((log) => log.taken_at);
-        const expectedDoses = 30; // Default to once daily for 30 days as rough estimate
-
-        console.log(
-          `Medication ${medication.generic_name}: ${takenLogs.length}/${expectedDoses} taken`
-        );
-
-        return {
-          name: medication.generic_name,
-          adherence:
-            expectedDoses > 0 ? (takenLogs.length / expectedDoses) * 100 : 0,
-          taken: takenLogs.length,
-          total: expectedDoses,
-          color: COLORS[index % COLORS.length],
-        };
-      })
-      .sort((a, b) => b.adherence - a.adherence);
-
-    setMedicationStats(stats);
+    setMedicationStats(stats.sort((a, b) => b.adherence - a.adherence));
   };
 
   const StatCard = ({ title, value, subtitle, icon: Icon, color }: any) => (
@@ -625,7 +616,7 @@ export default function Statistics() {
 
                 return (
                   <div
-                    key={index}
+                    key={`log-${index}`}
                     className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
                     <CheckCircle className="w-6 h-6 text-green-600" />
                     <div className="flex-1">
@@ -643,15 +634,44 @@ export default function Statistics() {
                   </div>
                 );
               })}
-            {intakeLogs.filter((log) => log.taken_at).length === 0 && (
-              <div className="text-center py-8 text-gray-500">
-                <Pill className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg">No hay actividad reciente</p>
-                <p className="text-sm">
-                  Comienza a registrar tus medicamentos para ver tu progreso
-                </p>
-              </div>
-            )}
+            {intakeLogs.filter((log) => log.taken_at).length === 0 &&
+              schedules
+                .filter((s: any) => s.is_taken)
+                .sort(
+                  (a: any, b: any) =>
+                    parseISO(b.scheduled_time).getTime() -
+                    parseISO(a.scheduled_time).getTime()
+                )
+                .slice(0, 5)
+                .map((s: any, index: number) => {
+                  const medication = medications.find(
+                    (m) => m.id === s.medication_id
+                  );
+                  if (!medication) return null;
+                  return (
+                    <div
+                      key={`sch-${index}`}
+                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                      <CheckCircle className="w-6 h-6 text-green-600" />
+                      <div className="flex-1">
+                        <div className="font-medium text-gray-900">
+                          {medication.generic_name} - {s.dose_amount}{" "}
+                          {medication.dosage_unit}
+                        </div>
+                        <div className="text-sm text-gray-600">
+                          {format(
+                            parseISO(s.scheduled_time),
+                            "dd/MM/yyyy HH:mm",
+                            {
+                              locale: es,
+                            }
+                          )}
+                        </div>
+                      </div>
+                      <Clock className="w-5 h-5 text-gray-400" />
+                    </div>
+                  );
+                })}
           </div>
         </div>
       </div>

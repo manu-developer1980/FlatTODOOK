@@ -48,16 +48,24 @@ export class PushNotificationService {
 
   async saveSubscription(userId: string, subscription: PushSubscription): Promise<boolean> {
     try {
+      await supabase
+        .from('user_push_subscriptions')
+        .delete()
+        .eq('user_id', userId);
+
       const { error } = await supabase
-        .from('web_push_subscriptions')
-        .upsert({
+        .from('user_push_subscriptions')
+        .insert({
           user_id: userId,
-          endpoint: subscription.endpoint,
-          p256dh_key: subscription.keys.p256dh,
-          auth_key: subscription.keys.auth,
-          created_at: new Date().toISOString()
-        }, {
-          onConflict: 'user_id'
+          subscription: {
+            endpoint: subscription.endpoint,
+            keys: {
+              p256dh: subscription.keys.p256dh,
+              auth: subscription.keys.auth,
+            },
+          },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
         });
 
       if (error) {
@@ -76,7 +84,7 @@ export class PushNotificationService {
   async removeSubscription(userId: string): Promise<boolean> {
     try {
       const { error } = await supabase
-        .from('web_push_subscriptions')
+        .from('user_push_subscriptions')
         .delete()
         .eq('user_id', userId);
 
@@ -95,22 +103,22 @@ export class PushNotificationService {
 
   async sendNotification(userId: string, payload: NotificationPayload): Promise<boolean> {
     try {
-      const { data: subscription, error } = await supabase
-        .from('web_push_subscriptions')
-        .select('endpoint, p256dh_key, auth_key')
+      const { data: row, error } = await supabase
+        .from('user_push_subscriptions')
+        .select('subscription')
         .eq('user_id', userId)
         .single();
 
-      if (error || !subscription) {
+      if (error || !row) {
         console.error('No push subscription found for user:', error);
         return false;
       }
 
       const pushSubscription: PushSubscription = {
-        endpoint: subscription.endpoint,
+        endpoint: (row as any).subscription.endpoint,
         keys: {
-          p256dh: subscription.p256dh_key,
-          auth: subscription.auth_key
+          p256dh: (row as any).subscription.keys.p256dh,
+          auth: (row as any).subscription.keys.auth
         }
       };
 
@@ -229,11 +237,11 @@ export class PushNotificationService {
 
   async broadcastToAllUsers(payload: NotificationPayload): Promise<{ success: number; failed: number }> {
     try {
-      const { data: subscriptions, error } = await supabase
-        .from('web_push_subscriptions')
-        .select('user_id, endpoint, p256dh_key, auth_key');
+      const { data: rows, error } = await supabase
+        .from('user_push_subscriptions')
+        .select('user_id, subscription');
 
-      if (error || !subscriptions) {
+      if (error || !rows) {
         console.error('Error fetching subscriptions:', error);
         return { success: 0, failed: 0 };
       }
@@ -241,13 +249,13 @@ export class PushNotificationService {
       let success = 0;
       let failed = 0;
 
-      for (const subscription of subscriptions) {
+      for (const row of rows as any[]) {
         try {
           const pushSubscription: PushSubscription = {
-            endpoint: subscription.endpoint,
+            endpoint: row.subscription.endpoint,
             keys: {
-              p256dh: subscription.p256dh_key,
-              auth: subscription.auth_key
+              p256dh: row.subscription.keys.p256dh,
+              auth: row.subscription.keys.auth
             }
           };
 
@@ -256,7 +264,7 @@ export class PushNotificationService {
         } catch (error: any) {
           failed++;
           if (error.statusCode === 410) {
-            await this.removeSubscription(subscription.user_id);
+            await this.removeSubscription(row.user_id);
           }
         }
       }
