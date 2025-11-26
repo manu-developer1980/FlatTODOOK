@@ -74,8 +74,6 @@ export default function Calendar() {
         return "gotas";
       case "injection":
         return "ml";
-      case "spray":
-        return "pulverizaciones";
       case "patch":
         return "parches";
       default:
