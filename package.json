@@ -7,7 +7,7 @@
     "dev": "vite",
     "dev:api": "tsx api/server.ts",
     "dev:full": "concurrently \"npm run dev\" \"npm run dev:api\"",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "build:api": "tsc -p api/tsconfig.json",
     "lint": "eslint .",
     "preview": "vite preview",
