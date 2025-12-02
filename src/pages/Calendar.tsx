@@ -60,6 +60,56 @@ export default function Calendar() {
     end_date: "",
   });
 
+  const generateTimesForFrequency = (freq: string): string[] => {
+    switch (freq) {
+      case "daily":
+        return ["09:00:00"];
+      case "twice_daily":
+        return ["08:00:00", "20:00:00"];
+      case "three_times_daily":
+        return ["08:00:00", "14:00:00", "20:00:00"];
+      case "four_times_daily":
+        return ["06:00:00", "12:00:00", "18:00:00", "22:00:00"];
+      case "every_4_hours": {
+        const times: string[] = [];
+        for (let h = 8; h < 24; h += 4) {
+          const hh = h.toString().padStart(2, "0");
+          times.push(`${hh}:00:00`);
+        }
+        return times;
+      }
+      case "every_6_hours": {
+        const times: string[] = [];
+        for (let h = 8; h < 24; h += 6) {
+          const hh = h.toString().padStart(2, "0");
+          times.push(`${hh}:00:00`);
+        }
+        return times;
+      }
+      case "every_8_hours": {
+        const times: string[] = [];
+        for (let h = 8; h < 24; h += 8) {
+          const hh = h.toString().padStart(2, "0");
+          times.push(`${hh}:00:00`);
+        }
+        return times;
+      }
+      case "every_12_hours":
+        return ["08:00:00", "20:00:00"];
+      case "weekly":
+        return ["09:00:00"];
+      case "monthly":
+        return ["09:00:00"];
+      default:
+        return ["09:00:00"];
+    }
+  };
+
+  useEffect(() => {
+    const times = generateTimesForFrequency(newTreatment.frequency);
+    setNewTreatment((prev) => ({ ...prev, specific_times: times }));
+  }, [newTreatment.frequency]);
+
   const getDoseUnit = (form: Medication["form"] | undefined) => {
     switch (form) {
       case "tablet":
