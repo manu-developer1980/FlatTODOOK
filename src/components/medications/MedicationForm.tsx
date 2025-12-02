@@ -156,6 +156,20 @@ export default function MedicationForm() {
     try {
       setLoading(true);
 
+      const medicationData = {
+        generic_name: formData.generic_name,
+        brand: formData.brand,
+        strength: formData.strength,
+        form: formData.form,
+        dosage: formData.dosage,
+        frequency: formData.frequency,
+        specific_times: formData.specific_times,
+        start_date: formData.start_date,
+        end_date: formData.end_date || null,
+        instructions: formData.instructions,
+        is_active: true,
+      } as any;
+
       if (isEdit && id) {
         const response = await db.updateMedication(id, medicationData);
         if (response.data) {
@@ -186,19 +200,6 @@ export default function MedicationForm() {
             throw new Error("Error al crear tratamiento");
           }
         } else {
-          const medicationData = {
-            generic_name: formData.generic_name,
-            brand: formData.brand,
-            strength: formData.strength,
-            form: formData.form,
-            dosage: formData.dosage,
-            frequency: formData.frequency,
-            specific_times: formData.specific_times,
-            start_date: formData.start_date,
-            end_date: formData.end_date || null,
-            instructions: formData.instructions,
-            is_active: true,
-          } as any;
           const response = await db.createMedication(user!.id, medicationData);
           if (response.data) {
             toast.success("Medicamento creado correctamente");

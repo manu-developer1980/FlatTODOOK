@@ -269,7 +269,7 @@ export const db = {
   },
 
   getUserSettings: async (userId: string) => {
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)
@@ -308,7 +308,7 @@ export const db = {
   },
 
   upsertUserSettings: async (userId: string, payload: any) => {
-    const { data: patient, error: patientError } = await supabase
+    let { data: patient, error: patientError } = await supabase
       .from("patients")
       .select("id")
       .eq("user_id", userId)

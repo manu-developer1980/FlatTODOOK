@@ -110,11 +110,11 @@ export default function Statistics() {
     return () => window.removeEventListener("focus", handleFocus);
   }, [user]);
 
+  const [schedules, setSchedules] = useState<any[]>([]);
+
   useEffect(() => {
     calculateStatistics();
   }, [medications, intakeLogs, schedules, timeRange]);
-
-  const [schedules, setSchedules] = useState<any[]>([]);
 
   const loadData = async () => {
     if (!user) return;
@@ -344,12 +344,16 @@ export default function Statistics() {
       return d >= startDate && d <= today;
     });
 
-    const byMed = new Map<string, { name: string; expected: number; taken: number }>();
+    const byMed = new Map<
+      string,
+      { name: string; expected: number; taken: number }
+    >();
     relevant.forEach((s: any) => {
       const key = String(s.medication_id);
       const current = byMed.get(key) || {
         name:
-          (s.medications && (s.medications.generic_name || s.medications.brand)) ||
+          (s.medications &&
+            (s.medications.generic_name || s.medications.brand)) ||
           `Medicamento ${byMed.size + 1}`,
         expected: 0,
         taken: 0,
@@ -376,7 +380,8 @@ export default function Statistics() {
   const StatCard = ({ title, value, subtitle, icon: Icon, color }: any) => (
     <div
       className="bg-white rounded-lg shadow-sm p-6 border-l-4"
-      style={{ borderLeftColor: color }}>
+      style={{ borderLeftColor: color }}
+    >
       <div className="flex items-center justify-between">
         <div>
           <p className="text-sm font-medium text-gray-600 mb-1">{title}</p>
@@ -428,7 +433,8 @@ export default function Statistics() {
                     timeRange === option.value
                       ? "bg-green-600 text-white"
                       : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                  }`}>
+                  }`}
+                >
                   {option.label}
                 </button>
               ))}
@@ -476,7 +482,10 @@ export default function Statistics() {
               Adherencia Diaria
             </h3>
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
                 <LineChart data={dailyAdherence}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="date" />
@@ -506,7 +515,10 @@ export default function Statistics() {
               Adherencia por Medicamento
             </h3>
             <div className="h-80">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
                 <BarChart data={medicationStats}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
@@ -517,7 +529,10 @@ export default function Statistics() {
                       "Adherencia",
                     ]}
                   />
-                  <Bar dataKey="adherence" fill="#2E8B57" />
+                  <Bar
+                    dataKey="adherence"
+                    fill="#2E8B57"
+                  />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -535,7 +550,10 @@ export default function Statistics() {
                 Distribución de Adherencia
               </h4>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer
+                  width="100%"
+                  height="100%"
+                >
                   <PieChart>
                     <Pie
                       data={medicationStats as any}
@@ -546,9 +564,13 @@ export default function Statistics() {
                       dataKey="adherence"
                       label={({ name, value }: any) =>
                         `${name}: ${Math.round(value)}%`
-                      }>
+                      }
+                    >
                       {medicationStats.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
+                        <Cell
+                          key={`cell-${index}`}
+                          fill={entry.color}
+                        />
                       ))}
                     </Pie>
                     <Tooltip
@@ -569,7 +591,8 @@ export default function Statistics() {
                 {medicationStats.map((med, index) => (
                   <div
                     key={index}
-                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
+                  >
                     <div className="flex items-center gap-3">
                       <div
                         className="w-4 h-4 rounded-full"
@@ -617,7 +640,8 @@ export default function Statistics() {
                 return (
                   <div
                     key={`log-${index}`}
-                    className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                    className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
+                  >
                     <CheckCircle className="w-6 h-6 text-green-600" />
                     <div className="flex-1">
                       <div className="font-medium text-gray-900">
@@ -651,7 +675,8 @@ export default function Statistics() {
                   return (
                     <div
                       key={`sch-${index}`}
-                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg">
+                      className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg"
+                    >
                       <CheckCircle className="w-6 h-6 text-green-600" />
                       <div className="flex-1">
                         <div className="font-medium text-gray-900">

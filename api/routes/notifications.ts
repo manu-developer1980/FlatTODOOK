@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { EmailService } from '../services/emailService';
-import { PushNotificationService } from '../services/pushNotificationService';
+import { EmailService } from '../services/emailService.js';
+import { PushNotificationService } from '../services/pushNotificationService.js';
 
 const router = Router();
 const emailService = new EmailService();
