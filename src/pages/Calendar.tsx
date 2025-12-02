@@ -894,12 +894,15 @@ export default function Calendar() {
                 </label>
                 <select
                   value={newTreatment.frequency}
-                  onChange={(e) =>
-                    setNewTreatment({
-                      ...newTreatment,
-                      frequency: e.target.value,
-                    })
-                  }
+                  onChange={(e) => {
+                    const freq = e.target.value;
+                    const times = generateTimesForFrequency(freq);
+                    setNewTreatment((prev) => ({
+                      ...prev,
+                      frequency: freq,
+                      specific_times: times,
+                    }));
+                  }}
                   className="w-full px-4 py-3 border border-gray-300 rounded-lg"
                 >
                   <option value="daily">Una vez al día</option>
@@ -978,10 +981,23 @@ export default function Calendar() {
               <button
                 onClick={async () => {
                   if (!user || !newTreatment.medicationId) return;
+                  const autoTimes = (() => {
+                    const current = (newTreatment.specific_times || []).filter(
+                      (t) => !!t
+                    );
+                    if (
+                      newTreatment.frequency !== "as_needed" &&
+                      (current.length <= 1 || current.join(",").trim() === "09:00:00")
+                    ) {
+                      return generateTimesForFrequency(newTreatment.frequency);
+                    }
+                    return current;
+                  })();
+
                   const payload: any = {
                     dosage: newTreatment.dosage,
                     frequency: newTreatment.frequency,
-                    specific_times: newTreatment.specific_times,
+                    specific_times: autoTimes,
                     start_date: newTreatment.start_date,
                     end_date: newTreatment.end_date || undefined,
                     is_active: true,
